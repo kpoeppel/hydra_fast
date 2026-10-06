@@ -123,7 +123,29 @@ fire, not how configs compose, so `version_base=None` resolves to 1.3.
 
 ## Deliberate deviations
 
-Two, both about hydra 1.4-dev rather than the 1.3 target.
+Three. Two are about hydra 1.4-dev rather than the 1.3 target; the third
+closes a hole in struct mode.
+
+### `delattr` respects struct mode
+
+omegaconf's `__delattr__` does not route through the struct check its
+`__delitem__` applies, so the two spellings of one operation disagree:
+
+```python
+cfg = OmegaConf.create({"a": 1}); OmegaConf.set_struct(cfg, True)
+del cfg["a"]          # omegaconf: ConfigTypeError    hydra-fast: ConfigTypeError
+delattr(cfg, "a")     # omegaconf: succeeds           hydra-fast: ConfigTypeError
+```
+
+Struct mode exists to stop a config's shape changing by accident, and one
+spelling bypassing it is a hole rather than a feature — so hydra-fast enforces
+both. This is the one place the container API is deliberately *stricter* than
+omegaconf. Readonly applies to both in either implementation.
+
+It is listed by name in `DELIBERATE_DIVERGENCES` (`tests/test_errors.py`) and
+`DELIBERATE` (`bench/oracle_flag_errors.py`), which assert the difference is
+still there — so if upstream ever fixes its own asymmetry, that shows up as a
+failure rather than going unnoticed.
 
 ### Group shorthand (`db: variants/mysql`)
 

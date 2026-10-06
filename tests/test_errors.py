@@ -162,8 +162,12 @@ ANTLR_MESSAGES = [
     ("dictContainer", r"{a: 'a\', b: 'b'}", "token recognition error at: ''}'"),
     ("override", "key=[1,2,3]'", "token recognition error at: '''"),
     # a specific token was required
-    ("override", "", "mismatched input '<EOF>' expecting "
-                     "{EQUAL, '~', '+', '@', KEY_SPECIAL, DOT_PATH, ID}"),
+    (
+        "override",
+        "",
+        "mismatched input '<EOF>' expecting "
+        "{EQUAL, '~', '+', '@', KEY_SPECIAL, DOT_PATH, ID}",
+    ),
     ("dictContainer", "{a:1", "mismatched input '<EOF>' expecting {COMMA, BRACE_CLOSE}"),
     # insertion recovery: what is here could follow the token that is missing
     ("dictContainer", "a b", "missing BRACE_OPEN at 'a'"),
@@ -273,15 +277,32 @@ _FLAG_CASES = [
 ]
 
 
+#: Operations where hydra-fast deliberately does *not* match omegaconf, with
+#: the reason. Named rather than dropped from the table, so the divergence
+#: stays reviewable and a second one cannot creep in unnoticed.
+DELIBERATE_DIVERGENCES = {
+    # omegaconf's `__delattr__` skips the struct check its `__delitem__`
+    # applies, so `delattr(cfg, "a")` bypasses struct mode entirely. That is a
+    # hole, not a feature: both spellings are enforced here.
+    ("dict", "struct", "delattr"),
+}
+
+
 @requires_omegaconf
 @pytest.mark.parametrize("kind,flag,label,operation", _FLAG_CASES)
 def test_flag_violation_matches_omegaconf(kind, flag, label, operation):
     import omegaconf
 
     data = (lambda: {"a": 1, "b": 2}) if kind == "dict" else (lambda: [1, 2])
-    assert _flag_outcome(OmegaConf, data, flag, operation) == _flag_outcome(
-        omegaconf.OmegaConf, data, flag, operation
-    )
+    mine = _flag_outcome(OmegaConf, data, flag, operation)
+    theirs = _flag_outcome(omegaconf.OmegaConf, data, flag, operation)
+    if (kind, flag, label) in DELIBERATE_DIVERGENCES:
+        assert mine != theirs, (
+            f"{kind}-{flag}-{label} is listed as a deliberate divergence but now "
+            "matches omegaconf -- remove it from DELIBERATE_DIVERGENCES"
+        )
+        return
+    assert mine == theirs
 
 
 def test_readonly_messages_name_the_operation():
@@ -316,25 +337,34 @@ def test_struct_deletion_messages_omit_the_key():
         assert (name, got) == ("ConfigTypeError", message)
 
 
-def test_delattr_is_exempt_from_struct_as_it_is_upstream():
-    """An inconsistency in omegaconf, matched rather than corrected.
+def test_delattr_and_delitem_both_respect_struct():
+    """A deliberate deviation: omegaconf enforces struct on only one of them.
 
-    `del cfg["a"]` raises on a struct config; `delattr(cfg, "a")` succeeds,
-    because omegaconf's `__delattr__` does not route through the struct check.
-    Code relying on that would otherwise break here. Readonly still applies.
+    Its `__delattr__` does not route through the struct check, so
+    `delattr(cfg, "a")` bypasses struct mode while `del cfg["a"]` raises. Two
+    spellings of one operation should not disagree, and struct mode exists to
+    stop a config's shape changing by accident -- so both raise here.
     """
     cfg = OmegaConf.create({"a": 1, "b": 2})
     OmegaConf.set_struct(cfg, True)
-    delattr(cfg, "a")
-    assert OmegaConf.to_container(cfg) == {"b": 2}
+    with pytest.raises(ConfigTypeError, match="does not support deletion"):
+        delattr(cfg, "a")
+    with pytest.raises(ConfigTypeError, match="does not support deletion"):
+        del cfg["a"]
+    assert OmegaConf.to_container(cfg) == {"a": 1, "b": 2}, "neither may mutate"
 
-    with pytest.raises(ConfigTypeError):
-        del cfg["b"]
-
+    # readonly applies to both too, as it does upstream
     readonly = OmegaConf.create({"a": 1})
     OmegaConf.set_readonly(readonly, True)
     with pytest.raises(ReadonlyConfigError):
         delattr(readonly, "a")
+    with pytest.raises(ReadonlyConfigError):
+        del readonly["a"]
+
+    # and without struct, attribute deletion still works
+    plain = OmegaConf.create({"a": 1, "b": 2})
+    delattr(plain, "a")
+    assert OmegaConf.to_container(plain) == {"b": 2}
 
 
 def test_clear_is_blocked_by_struct():

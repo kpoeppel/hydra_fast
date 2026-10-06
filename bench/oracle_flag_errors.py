@@ -67,6 +67,16 @@ def outcome(api, factory, flag, operation):
         return (type(exc).__name__, first)
 
 
+#: (container, flag, operation) triples where hydra-fast deliberately differs.
+#: Reported, but not counted as a failure. Mirrors DELIBERATE_DIVERGENCES in
+#: tests/test_errors.py.
+DELIBERATE = {
+    # omegaconf's `__delattr__` skips the struct check its `__delitem__`
+    # applies, so `delattr(cfg, "a")` bypasses struct mode. Enforced here.
+    ("DictConfig", "struct", "__delattr__"),
+}
+
+
 def run(title, ops, factory, flags):
     print(f"\n{'=' * 78}\n{title}\n{'=' * 78}")
     diffs = 0
@@ -76,11 +86,13 @@ def run(title, ops, factory, flags):
             got = outcome(hydra_fast.OmegaConf, factory, flag, operation)
             if want == got:
                 continue
-            diffs += 1
-            print(f"\nDIFF [{flag}] {label}")
+            intended = (title, flag, label) in DELIBERATE
+            if not intended:
+                diffs += 1
+            print(f"\n{'INTENDED' if intended else 'DIFF'} [{flag}] {label}")
             print(f"  omegaconf : {want[0]}: {want[1]}")
             print(f"  hydra-fast: {got[0]}: {got[1]}")
-    print(f"\n{title}: {diffs} differences")
+    print(f"\n{title}: {diffs} unintended differences")
     return diffs
 
 
@@ -88,7 +100,7 @@ def main() -> int:
     total = 0
     total += run("DictConfig", DICT_OPS, lambda: {"a": 1, "b": 2}, ["readonly", "struct"])
     total += run("ListConfig", LIST_OPS, lambda: [1, 2], ["readonly", "struct"])
-    print(f"\n{'=' * 78}\nTOTAL DIFFERENCES: {total}")
+    print(f"\n{'=' * 78}\nTOTAL UNINTENDED DIFFERENCES: {total}")
     return 1 if total else 0
 
 
