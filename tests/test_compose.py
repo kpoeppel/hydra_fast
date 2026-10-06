@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import textwrap
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
@@ -509,3 +511,79 @@ def test_sweep_override_requires_multirun(tmp_path):
         pytest.raises(ConfigCompositionException),
     ):
         compose(config_name=config_name, overrides=["db.port=1,2,3"])
+
+
+# ---------------------------------------------------------------------------
+# `@main` is the other public entry point, and needs a real script and argv to
+# exercise: it reads sys.argv, resolves config_path against the calling
+# module's file, and runs the task function. Nothing else in the suite covers
+# it, so it has to be a subprocess.
+# ---------------------------------------------------------------------------
+MAIN_APP = """
+import sys
+sys.path.insert(0, {src!r})
+from hydra_fast import main, OmegaConf
+
+@main(config_path="conf", config_name="config", version_base=None)
+def run(cfg):
+    print("RESULT", OmegaConf.to_container(cfg, resolve=True))
+
+run()
+"""
+
+MAIN_TREE = {
+    "conf/config.yaml": "defaults:\n  - db: pg\n  - _self_\nname: app\nurl: ${db.host}:${db.port}\n",
+    "conf/db/pg.yaml": "# @package db\nhost: localhost\nport: 5432\n",
+    "conf/db/mysql.yaml": "# @package db\nhost: my-host\nport: 3306\n",
+}
+
+
+def _main_app(tmp_path):
+    import sys as _sys
+
+    root = tmp_path / "mainapp"
+    for name, body in MAIN_TREE.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+    src = str(Path(__file__).resolve().parent.parent / "src")
+    (root / "app.py").write_text(MAIN_APP.format(src=src))
+    return root, _sys.executable
+
+
+@pytest.mark.parametrize(
+    "argv,expected",
+    [
+        ([], {"host": "localhost", "port": 5432}),
+        (["++db.port=6543"], {"host": "localhost", "port": 6543}),
+        (["db=mysql"], {"host": "my-host", "port": 3306}),
+    ],
+    ids=["defaults", "value-override", "group-override"],
+)
+def test_main_decorator_composes_from_argv(tmp_path, argv, expected):
+    import subprocess
+
+    root, python = _main_app(tmp_path)
+    proc = subprocess.run(
+        [python, "app.py", *argv], cwd=str(root), capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    line = next(x for x in proc.stdout.splitlines() if x.startswith("RESULT"))
+    result = ast.literal_eval(line[len("RESULT ") :])
+    assert result["db"] == expected
+    assert result["url"] == f"{expected['host']}:{expected['port']}", "interpolation resolved"
+
+
+def test_main_decorator_passes_a_config_through(tmp_path):
+    """`cfg_passthrough` short-circuits composition, as hydra's does."""
+    from hydra_fast import OmegaConf, main
+
+    seen = {}
+
+    @main(config_path=None, config_name=None, version_base=None)
+    def run(cfg):
+        seen["cfg"] = cfg
+
+    given = OmegaConf.create({"a": 1})
+    run(given)
+    assert seen["cfg"] is given
