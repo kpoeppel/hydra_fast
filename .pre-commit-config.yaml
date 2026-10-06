@@ -1,0 +1,58 @@
+---
+# Matches the coverage of compoconf's pre-commit setup -- formatting, import
+# order, linting, type checking, security, YAML and whitespace hygiene -- but
+# uses ruff for the first three. ruff subsumes black, flake8, isort and most of
+# pylint, and this repository already configures it in pyproject.toml with a
+# deliberate rule selection, a 95-column width and documented per-file ignores.
+# Running black at 120 alongside it would reformat every file and then disagree
+# with the ruff config on every commit.
+#
+# Install once:  pre-commit install
+# Run manually:  pre-commit run --all-files
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9 # keep in step with the version CI's lint job installs
+    hooks:
+      - id: ruff # lint: E, F, W, I (imports), B, C4, SIM
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        # mypy needs the real signatures of anything it type-checks against.
+        # PyYAML is the only runtime dependency; the rest are what the typed
+        # test and bench modules import.
+        additional_dependencies:
+          - types-PyYAML
+        # `files` rather than the default, so it checks exactly what
+        # [tool.mypy] declares: the package, not tests or bench scripts.
+        files: ^src/hydra_fast/
+        args: [--config-file=pyproject.toml]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: [--configfile=pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+        exclude: ^tests/
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [--strict, -c, .yamllint]

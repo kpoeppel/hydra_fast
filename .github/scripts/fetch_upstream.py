@@ -19,6 +19,7 @@ checks expect.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import sys
 import tarfile
@@ -41,7 +42,8 @@ WANTED = [
 
 def sdist_url(name: str, version: str) -> Tuple[str, str]:
     """``(url, sha256)`` of the sdist for ``name==version``."""
-    with urllib.request.urlopen(
+    # A literal https URL; the scheme cannot be influenced here.
+    with urllib.request.urlopen(  # nosec B310
         f"https://pypi.org/pypi/{name}/{version}/json", timeout=60
     ) as response:
         meta = json.load(response)
@@ -51,10 +53,18 @@ def sdist_url(name: str, version: str) -> Tuple[str, str]:
     raise SystemExit(f"no sdist published for {name}=={version}")
 
 
+def _https(url: str) -> str:
+    """Reject anything but https -- the API response should not be trusted
+    blindly to name a scheme, and `urlopen` would happily take `file:`."""
+    if not url.startswith("https://"):
+        raise SystemExit(f"refusing non-https URL: {url}")
+    return url
+
+
 def fetch(url: str, expected_sha256: str, into: Path) -> Path:
     archive = into / url.rsplit("/", 1)[-1]
     if not archive.exists():
-        with urllib.request.urlopen(url, timeout=120) as response:
+        with urllib.request.urlopen(_https(url), timeout=120) as response:  # nosec B310
             archive.write_bytes(response.read())
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if digest != expected_sha256:
@@ -63,19 +73,35 @@ def fetch(url: str, expected_sha256: str, into: Path) -> Path:
     return archive
 
 
+#: Whether `TarFile.extractall` accepts `filter=`. Added in 3.12 and
+#: backported to 3.10.12 / 3.11.4 for CVE-2007-4559, so feature-detect rather
+#: than compare version tuples.
+_HAS_EXTRACT_FILTER = "filter" in inspect.signature(tarfile.TarFile.extractall).parameters
+
+
 def extract(archive: Path, into: Path) -> None:
+    """Extract ``archive`` into ``into``, refusing anything that escapes it."""
     destination = into.resolve()
     with tarfile.open(archive) as tar:
         for member in tar.getmembers():
-            # Refuse any path that would escape the destination.
-            if not str((into / member.name).resolve()).startswith(str(destination)):
+            # A path that resolves outside the destination -- `../` traversal.
+            target = (into / member.name).resolve()
+            if not str(target).startswith(str(destination)):
                 raise SystemExit(f"{archive.name} holds an unsafe path: {member.name}")
-        # `filter=` arrived in 3.12 and warns when omitted; "data" is the
-        # conservative setting, and the default from 3.14 on.
-        if sys.version_info >= (3, 12):
+            # A link can escape even when its own path does not: extract a
+            # symlink pointing outside, then a later member writes through it.
+            # The path check above cannot see that, so links are refused
+            # outright -- an sdist has no business containing them.
+            if member.issym() or member.islnk():
+                raise SystemExit(f"{archive.name} holds a link member: {member.name}")
+            if not (member.isfile() or member.isdir()):
+                raise SystemExit(f"{archive.name} holds a special file: {member.name}")
+        if _HAS_EXTRACT_FILTER:
+            # "data" is the conservative policy and the default from 3.14 on;
+            # it re-checks the above and strips ownership and permission bits.
             tar.extractall(into, filter="data")
         else:
-            tar.extractall(into)
+            tar.extractall(into)  # nosec B202
 
 
 def main() -> int:

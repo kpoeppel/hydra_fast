@@ -70,6 +70,17 @@ include = ["hydra_fast*"]
 [tool.setuptools.package-data]
 hydra_fast = ["py.typed", "conf/**/*.yaml"]
 
+[tool.bandit]
+# B101: `assert` is how the internal invariants are written.
+# B608: the SQL-injection heuristic matches the words "delete ... from" inside
+#       an error message ("Could not delete from config."). There is no SQL in
+#       this project at all.
+skips = ["B101", "B608"]
+# tests/ and bench/ are development harnesses: they use `assert`, spawn pytest
+# with fixed arguments, and write throwaway trees under the temp directory.
+# Only the shipped package and the CI scripts are scanned.
+exclude_dirs = ["tests", "bench", ".upstream", ".venv"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
@@ -90,6 +101,15 @@ ignore = [
   "E501",   # long lines are the formatter's business
   "B008",   # function call in a default is used deliberately for sentinels
   "SIM108", # ternaries are not always clearer
+]
+
+[tool.ruff.format]
+# The same two files the lint ignores below cover. `per-file-ignores` governs
+# lint only, so without this the formatter would reflow them anyway -- which is
+# exactly what that exemption exists to prevent.
+exclude = [
+  "src/hydra_fast/_internal/defaults_list.py",
+  "src/hydra_fast/_internal/default_element.py",
 ]
 
 [tool.ruff.lint.per-file-ignores]

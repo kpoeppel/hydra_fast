@@ -62,7 +62,7 @@ jobs:
         # floor) and verified against it; CI covers the newest because that is
         # where a break would appear first.
         run: |
-          pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
+          pins=$(python .github/scripts/pins.py)
           echo "pinning $pins"
           python -m pip install -e ".[test,attrs,compoconf]" $pins
           python -m pip install --upgrade compoconf
@@ -107,7 +107,7 @@ jobs:
           python-version: "3.12"
       - name: Install with the reference packages pinned
         run: |
-          pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
+          pins=$(python .github/scripts/pins.py)
           echo "pinning $pins"
           python -m pip install -e ".[test,attrs,compoconf]" $pins
           python -m pip install --upgrade compoconf

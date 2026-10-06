@@ -166,6 +166,23 @@ omegaconf suites import private internals that are only partially shimmed. Both
 boundaries are itemised in
 [docs/compatibility.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/compatibility.md) — treat it as the contract.
 
+### Contributing
+
+```console
+$ pip install -e ".[test,attrs,compoconf]" pre-commit
+$ pre-commit install
+```
+
+`pre-commit run --all-files` runs what CI runs: ruff (lint and format), mypy,
+bandit, yamllint, and the usual whitespace/YAML checks. ruff replaces the
+black/flake8/isort/pylint stack — the configuration lives in `pyproject.toml`
+at 95 columns.
+
+Two files are exempt from both the linter and the formatter:
+`_internal/defaults_list.py` and `_internal/default_element.py` are ported from
+hydra essentially verbatim so they stay diffable against upstream, and
+reformatting them would defeat that.
+
 ### Running the differential tests
 
 ```console

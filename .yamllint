@@ -1,0 +1,18 @@
+---
+# The workflows use long `run:` lines and GitHub's `on:` key, which yamllint's
+# default profile objects to.
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    # Shell commands inside `run:` blocks cannot always be wrapped.
+    allow-non-breakable-words: true
+  truthy:
+    # GitHub Actions' `on:` trigger key is not a boolean.
+    allowed-values: ["true", "false"]
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  document-start:
+    present: false
