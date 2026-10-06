@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pathlib
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import yaml
 
@@ -59,6 +59,20 @@ _FLOAT_RE = re.compile(
 )
 
 
+def _apply_constructor(factory: Any) -> Callable[[Any, Any], Any]:
+    """A constructor that calls ``factory`` with the node's sequence.
+
+    A closure rather than a lambda with a default argument: the loop variable
+    has to be bound now, not at call time, and the default-argument trick that
+    does that cannot be given a type.
+    """
+
+    def construct(loader: Any, node: Any) -> Any:
+        return factory(*loader.construct_sequence(node))
+
+    return construct
+
+
 def _build_loader() -> Any:
     class HydraFastLoader(_BaseLoader):  # type: ignore[misc,valid-type]
         pass
@@ -67,7 +81,9 @@ def _build_loader() -> Any:
         "tag:yaml.org,2002:float", _FLOAT_RE, list("-+0123456789.")
     )
     HydraFastLoader.yaml_implicit_resolvers = {
-        key: [(tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"]
+        key: [
+            (tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"
+        ]
         for key, resolvers in HydraFastLoader.yaml_implicit_resolvers.items()
     }
 
@@ -82,8 +98,7 @@ def _build_loader() -> Any:
     ):
         HydraFastLoader.add_constructor(
             f"tag:yaml.org,2002:python/object/apply:{name}",
-            # default-arg binding: the loop variable would otherwise be shared
-            lambda loader, node, _factory=factory: _factory(*loader.construct_sequence(node)),
+            _apply_constructor(factory),
         )
     return HydraFastLoader
 
@@ -104,7 +119,30 @@ class _Dumper(_BaseDumper):  # type: ignore[misc,valid-type]
 # treats as booleans; transcribed from omegaconf's dumper so generated YAML is
 # byte-comparable with it.
 _YAML_BOOL_SPELLINGS = frozenset(
-    ["y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO", "true", "True", "TRUE", "false", "False", "FALSE", "on", "On", "ON", "off", "Off", "OFF"]
+    [
+        "y",
+        "Y",
+        "yes",
+        "Yes",
+        "YES",
+        "n",
+        "N",
+        "no",
+        "No",
+        "NO",
+        "true",
+        "True",
+        "TRUE",
+        "false",
+        "False",
+        "FALSE",
+        "on",
+        "On",
+        "ON",
+        "off",
+        "Off",
+        "OFF",
+    ]
 )
 
 
@@ -123,9 +161,7 @@ def _looks_numeric(text: str) -> bool:
 
 def _str_representer(dumper: Any, data: str) -> Any:
     quote = data in _YAML_BOOL_SPELLINGS or _looks_numeric(data)
-    return dumper.represent_scalar(
-        "tag:yaml.org,2002:str", data, style="'" if quote else None
-    )
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="'" if quote else None)
 
 
 _Dumper.add_representer(str, _str_representer)
@@ -147,7 +183,9 @@ def _check_duplicate_keys(text: str) -> None:
     constructor in play and costs a scan, not a parse.
     """
     try:
-        events = list(yaml.parse(text, Loader=yaml.CSafeLoader if HAS_LIBYAML else yaml.SafeLoader))
+        events = list(
+            yaml.parse(text, Loader=yaml.CSafeLoader if HAS_LIBYAML else yaml.SafeLoader)
+        )
     except yaml.YAMLError:
         return  # the real load below reports the syntax error properly
 
@@ -199,7 +237,10 @@ def load_yaml_str(text: str, *, check_duplicates: bool = True) -> Any:
         # differ in a way users notice; skip the extra scan otherwise.
         _check_duplicate_keys(text)
     try:
-        data = yaml.load(text, Loader=_LOADER)
+        # _LOADER subclasses (C)SafeLoader -- see _build_loader -- so this is
+        # a safe load. bandit's B506 fires on any `yaml.load` that is not
+        # literally `safe_load`, which it cannot tell apart.
+        data = yaml.load(text, Loader=_LOADER)  # nosec B506
     except yaml.YAMLError as exc:
         raise _wrap_yaml_error(exc) from exc
     return {} if data is None else data
@@ -244,7 +285,8 @@ def yaml_type_of(value: str) -> Any:
 @_cache.memoize("yaml_scalar")
 def _scalar_cache(value: str) -> Any:
     try:
-        return yaml.load(value, Loader=_LOADER)
+        # Safe for the same reason as `load_yaml_file` above.
+        return yaml.load(value, Loader=_LOADER)  # nosec B506
     except yaml.YAMLError:
         return value
 

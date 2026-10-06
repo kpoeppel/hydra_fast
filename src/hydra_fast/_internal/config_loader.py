@@ -379,10 +379,9 @@ class ConfigLoader:
                 if override.is_delete():
                     ConfigLoader._apply_delete(cfg, override, key, value)
                 elif override.is_add():
-                    if (
-                        OmegaConf.select(cfg, key, throw_on_missing=False) is None
-                        or isinstance(value, (dict, list))
-                    ):
+                    if OmegaConf.select(
+                        cfg, key, throw_on_missing=False
+                    ) is None or isinstance(value, (dict, list)):
                         OmegaConf.update(cfg, key, value, merge=True, force_add=True)
                     else:
                         assert override.input_line is not None
@@ -419,18 +418,20 @@ class ConfigLoader:
     @staticmethod
     def _apply_delete(cfg: DictConfig, override: Override, key: str, value: Any) -> None:
         parts = split_key(key)
-        container = _select_raw(cfg._hf_root.data, tuple(parts[:-1])) if len(parts) > 1 else (
-            cfg._hf_container()
-        )
-        last = parts[-1] if parts else None
-        present = (
-            isinstance(container, (dict, list))
-            and last is not None
-            and (
-                last in container
-                if isinstance(container, dict)
-                else last.isdigit() and int(last) < len(container)
+        if not parts:
+            raise ConfigCompositionException(
+                f"Could not delete from config. '{override.key_or_group}' does not exist."
             )
+        container = (
+            _select_raw(cfg._hf_root.data, tuple(parts[:-1]))
+            if len(parts) > 1
+            else (cfg._hf_container())
+        )
+        last = parts[-1]
+        present = isinstance(container, (dict, list)) and (
+            last in container
+            if isinstance(container, dict)
+            else last.isdigit() and int(last) < len(container)
         )
         if container is _ABSENT or not present:
             raise ConfigCompositionException(

@@ -39,7 +39,10 @@ from .grammar import interpolation as _ip
 
 __all__ = ["DictConfig", "ListConfig", "Container", "MISSING", "Node"]
 
-MISSING = "???"
+#: The mandatory-value sentinel. Typed ``Any`` because it is assigned into
+#: fields of every declared type -- it stands for a value not yet supplied,
+#: of whatever type that field holds.
+MISSING: Any = "???"
 
 _PRIMITIVES = (int, float, str, bool, type(None))
 
@@ -154,9 +157,7 @@ class _Ctx:
                 InterpolationKeyError(f"Interpolation key '{spelling}' not found")
             ) from None
         if value is _ABSENT:
-            raise self._at(
-                InterpolationKeyError(f"Interpolation key '{spelling}' not found")
-            )
+            raise self._at(InterpolationKeyError(f"Interpolation key '{spelling}' not found"))
 
         resolved = _resolve_inner(root, target, value, self.memo, self.active)
         if _is_missing_value(resolved):
@@ -443,6 +444,15 @@ class Container(Node):
     _hf_root: _Root
     _hf_path: Tuple[Any, ...]
 
+    def __getitem__(self, key: Any) -> Any:
+        """Declared here because both subclasses implement it.
+
+        Code that has only narrowed to ``Container`` still indexes, so the
+        shared surface belongs on the shared base rather than being asserted
+        at each call site.
+        """
+        raise NotImplementedError  # pragma: no cover - subclasses override
+
     # -- construction ----------------------------------------------------
     @classmethod
     def _hf_view(cls, root: _Root, path: Tuple[Any, ...]) -> Any:
@@ -573,9 +583,7 @@ class Container(Node):
             path = self._hf_path if key is None else self._hf_path + (key,)
             full_key, object_type = _describe(self._hf_root, path)
             raise decorate(
-                ReadonlyConfigError(
-                    message or "Cannot change read-only config container"
-                ),
+                ReadonlyConfigError(message or "Cannot change read-only config container"),
                 full_key,
                 object_type,
             )
@@ -777,7 +785,9 @@ class DictConfig(Container):
             return None
         return self._hf_get(self._hf_path + (key,), data[key])
 
-    def _get_node(self, key: Any, validate_access: bool = True, default_value: Any = _ABSENT) -> Any:
+    def _get_node(
+        self, key: Any, validate_access: bool = True, default_value: Any = _ABSENT
+    ) -> Any:
         """The node at ``key``: a container view, or a live ``ValueNode``.
 
         OmegaConf-internal API. Scalars come back wrapped because callers do
@@ -841,13 +851,14 @@ class DictConfig(Container):
         self._hf_delete(key, check_struct=True)
 
     def __delattr__(self, name: str) -> None:
-        # Struct mode is *not* enforced here, which is an inconsistency in
-        # omegaconf rather than a choice: `del cfg["a"]` raises on a struct
-        # config and `delattr(cfg, "a")` succeeds, because its `__delattr__`
-        # does not route through the struct check. Matched because code
-        # relying on it would otherwise break on hydra-fast; readonly still
-        # applies, as it does upstream.
-        self._hf_delete(name, check_struct=False)
+        # A deliberate deviation. omegaconf's `__delattr__` does not route
+        # through the struct check, so `del cfg["a"]` raises on a struct config
+        # while `delattr(cfg, "a")` quietly succeeds -- two spellings of one
+        # operation disagreeing. Struct mode exists to stop a config's shape
+        # changing by accident, and one spelling bypassing it is a hole rather
+        # than a feature, so both are enforced here. See
+        # docs/compatibility.md ("Deliberate deviations").
+        self._hf_delete(name, check_struct=True)
 
     def pop(self, key: Any, default: Any = _ABSENT) -> Any:
         self._hf_check_writable(key, "Cannot pop from read-only node")
@@ -858,9 +869,7 @@ class DictConfig(Container):
             if default is not _ABSENT:
                 return default
             full_key, object_type = _describe(self._hf_root, self._hf_path + (key,))
-            raise decorate(
-                ConfigKeyError(f"Key not found: '{key}'"), full_key, object_type
-            )
+            raise decorate(ConfigKeyError(f"Key not found: '{key}'"), full_key, object_type)
         value = self._hf_get(self._hf_path + (key,), data[key])
         if isinstance(value, Container):
             value = value._hf_clone(deep=True)

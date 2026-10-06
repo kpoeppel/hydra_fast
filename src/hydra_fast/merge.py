@@ -49,7 +49,9 @@ def merge_into(
     from ._typing import is_open_mapping, is_schema_backed, known_fields
 
     schema_backed = is_schema_backed(types, prefix) if types else False
-    declared = known_fields(types, prefix) if schema_backed else None
+    # Always a set: `known_fields` returns an empty one when there is no
+    # schema, and it is only consulted when `schema_backed` anyway.
+    declared = known_fields(types, prefix) if schema_backed else set()
     # A `Dict[K, V]`-annotated field takes any key; the annotation governs the
     # values. So neither the schema nor struct mode closes it.
     open_mapping = is_open_mapping(types, prefix) if types else False
@@ -64,6 +66,7 @@ def merge_into(
                 from .errors import decorate
 
                 if schema_backed:
+                    assert types is not None  # implied by schema_backed
                     name = _schema_name(types, prefix)
                     message = f"Key '{key}' not in '{name}'"
                 else:
@@ -194,17 +197,13 @@ def merge_configs(*configs: Any) -> Any:
         types = _types_of(configs[0])
         # struct mode is inherited, so the destination's flag governs the whole
         # merge: a key absent from a struct config is an error at any depth.
-        struct = bool(
-            isinstance(configs[0], Container) and configs[0]._get_flag("struct")
-        )
+        struct = bool(isinstance(configs[0], Container) and configs[0]._get_flag("struct"))
         for other in configs[1:]:
             other_plain = _as_plain(other)
             if isinstance(other_plain, list):
                 raise ValueError("Cannot merge a list config into a dict config")
             if not isinstance(other_plain, dict):
-                raise ValueError(
-                    f"Cannot merge a config of type {type(other_plain).__name__}"
-                )
+                raise ValueError(f"Cannot merge a config of type {type(other_plain).__name__}")
             types = _combine(types, _types_of(other))
             merge_into(result, other_plain, types, struct=struct)
         merged = DictConfig._hf_adopt(result, types)

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from .container import MISSING
 from .errors import ValidationError
@@ -50,9 +50,11 @@ def get_structured_type(data: Any) -> Optional[Any]:
     return _ORIGIN.get(id(data))
 
 
-def type_map_for(value: Any) -> Optional[Dict[str, Any]]:
+def type_map_for(value: Any) -> Optional[Dict[Tuple[Any, ...], Any]]:
     """Declared annotations for a structured class or instance.
 
+    Keyed by *path tuple*, not field name -- a nested dataclass contributes
+    ``("db", "port")`` -- which is what lets one map cover a whole tree.
     Returned separately from the flattened data so the config root can carry
     it; see :mod:`hydra_fast._typing`.
     """
@@ -106,11 +108,7 @@ def structured_to_plain(value: Any) -> Dict[str, Any]:
         out = {}
         for field in attr.fields(cls):
             if isinstance(value, type):
-                item = (
-                    field.default
-                    if field.default is not attr.NOTHING
-                    else MISSING
-                )
+                item = field.default if field.default is not attr.NOTHING else MISSING
                 if isinstance(item, attr.Factory):  # type: ignore[arg-type]
                     item = item.factory()  # type: ignore[attr-defined]
             else:

@@ -89,6 +89,10 @@ def _restore(loader: Any) -> None:
 # initialization context managers
 # ---------------------------------------------------------------------------
 class _InitBase:
+    #: Singleton state captured at entry, restored on exit. Every subclass
+    #: sets it in __init__; declared here because __exit__ reads it.
+    _backup: Any
+
     def __enter__(self) -> None:
         return None
 

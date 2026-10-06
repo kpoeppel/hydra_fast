@@ -61,7 +61,7 @@ class _NodeMetadata:
         element_type: Any = typing.Any,
         optional: bool = True,
         key_type: Any = typing.Any,
-        flags: Optional[Dict[str, bool]] = None,
+        flags: Optional[Dict[str, Optional[bool]]] = None,
     ) -> None:
         self.key = key
         self.object_type = object_type

@@ -27,7 +27,7 @@ import enum  # noqa: F401  (referenced by DictKeyType)
 import importlib.machinery
 import sys
 import types
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 __all__ = ["install", "installed", "uninstall"]
 
@@ -55,6 +55,20 @@ _saved: Dict[str, Any] = {}
 _installed = False
 
 
+def _module(name: str, doc: Optional[str] = None) -> Any:
+    """A synthetic module whose attributes are assigned dynamically.
+
+    Typed ``Any`` deliberately: building a module by assignment is the whole
+    mechanism here, and mypy models ``ModuleType`` as having only the standard
+    attributes, so every assignment below would otherwise be an error. The
+    names are checked by the tests that import through the shim instead.
+    """
+    module = types.ModuleType(name)
+    if doc is not None:
+        module.__doc__ = doc
+    return module
+
+
 def _real_path(dotted: str) -> List[str]:
     """``__path__`` of the real installed package, or ``[]`` if absent.
 
@@ -78,11 +92,14 @@ def installed() -> bool:
     return _installed
 
 
-def _make_omegaconf_module() -> types.ModuleType:
+def _make_omegaconf_module() -> "Tuple[Any, Any, Any, Any]":
     import hydra_fast
     from hydra_fast import container, errors, omegaconf_api
 
-    module = types.ModuleType("omegaconf")
+    # Returns the four modules that make up the omegaconf surface, not one:
+    # `omegaconf`, and the three submodules that have to be registered in
+    # sys.modules separately so `import omegaconf.errors` resolves.
+    module = _module("omegaconf")
     module.__doc__ = "hydra-fast shim standing in for omegaconf."
     module.OmegaConf = omegaconf_api.OmegaConf
     module.DictConfig = container.DictConfig
@@ -119,7 +136,7 @@ def _make_omegaconf_module() -> types.ModuleType:
     module.DictKeyType = typing.Union[str, bytes, int, "enum.Enum", float, bool]
     module.ListMergeMode = None  # omegaconf 2.4 only; present so getattr works
 
-    utils_module = types.ModuleType("omegaconf._utils")
+    utils_module = _module("omegaconf._utils")
     from hydra_fast import _structured as _hf_structured
     from hydra_fast import _yaml as _hf_yaml
     from hydra_fast.grammar import functions as _hf_funcs
@@ -135,7 +152,7 @@ def _make_omegaconf_module() -> types.ModuleType:
     )
     module._utils = utils_module
 
-    grammar_parser_module = types.ModuleType("omegaconf.grammar_parser")
+    grammar_parser_module = _module("omegaconf.grammar_parser")
     from hydra_fast.grammar import interpolation as _hf_interp
 
     grammar_parser_module.parse = _hf_interp.parse
@@ -169,7 +186,7 @@ def _make_omegaconf_module() -> types.ModuleType:
     ):
         setattr(module, name, getattr(errors, name))
 
-    errors_module = types.ModuleType("omegaconf.errors")
+    errors_module = _module("omegaconf.errors")
     for name in dir(errors):
         if not name.startswith("_"):
             setattr(errors_module, name, getattr(errors, name))
@@ -184,7 +201,7 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     from hydra_fast.core import config_store
     from hydra_fast.grammar import override as override_types
 
-    hydra_module = types.ModuleType("hydra")
+    hydra_module = _module("hydra")
     hydra_module.__doc__ = "hydra-fast shim standing in for hydra."
     # A real __path__ keeps unshimmed submodules importable from upstream;
     # the shimmed ones are in sys.modules and are found before any search.
@@ -197,7 +214,7 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     hydra_module.__version__ = f"hydra-fast-{hydra_fast.__version__}"
     hydra_module.MissingConfigException = errors.MissingConfigException
 
-    hydra_errors = types.ModuleType("hydra.errors")
+    hydra_errors = _module("hydra.errors")
     for name in (
         "HydraException",
         "CompactHydraException",
@@ -211,21 +228,21 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
         setattr(hydra_errors, name, getattr(errors, name))
     hydra_module.errors = hydra_errors
 
-    hydra_core = types.ModuleType("hydra.core")
+    hydra_core = _module("hydra.core")
     hydra_core.__path__ = _real_path("hydra.core")
 
-    core_store = types.ModuleType("hydra.core.config_store")
+    core_store = _module("hydra.core.config_store")
     core_store.ConfigStore = config_store.ConfigStore
     core_store.ConfigStoreWithProvider = config_store.ConfigStoreWithProvider
     core_store.ConfigNode = config_store.ConfigNode
     hydra_core.config_store = core_store
 
-    override_parser = types.ModuleType("hydra.core.override_parser")
+    override_parser = _module("hydra.core.override_parser")
     override_parser.__path__ = _real_path("hydra.core.override_parser")
 
     from hydra_fast.core.override_parser import overrides_parser as _op
 
-    parser_module = types.ModuleType("hydra.core.override_parser.overrides_parser")
+    parser_module = _module("hydra.core.override_parser.overrides_parser")
     parser_module.OverridesParser = _op.OverridesParser
     parser_module.create_functions = _op.create_functions
     override_parser.overrides_parser = parser_module
@@ -235,14 +252,14 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     from hydra_fast.grammar import functions as _gf
     from hydra_fast.grammar import utils as _gu
 
-    internal = types.ModuleType("hydra._internal")
+    internal = _module("hydra._internal")
     internal.__path__ = _real_path("hydra._internal")
-    internal_grammar = types.ModuleType("hydra._internal.grammar")
+    internal_grammar = _module("hydra._internal.grammar")
     internal_grammar.__path__ = _real_path("hydra._internal.grammar")
-    grammar_functions = types.ModuleType("hydra._internal.grammar.functions")
+    grammar_functions = _module("hydra._internal.grammar.functions")
     grammar_functions.Functions = _gf.Functions
     grammar_functions.FunctionCall = _gf.FunctionCall
-    grammar_utils = types.ModuleType("hydra._internal.grammar.utils")
+    grammar_utils = _module("hydra._internal.grammar.utils")
     grammar_utils.escape_special_characters = _gu.escape_special_characters
     grammar_utils.is_type_matching = _gf.is_type_matching
     internal_grammar.functions = grammar_functions
@@ -252,7 +269,7 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
 
     from hydra_fast import version as _hf_version
 
-    version_module = types.ModuleType("hydra.version")
+    version_module = _module("hydra.version")
     version_module.__version__ = hydra_module.__version__
     version_module.getbase = _hf_version.getbase
     version_module.setbase = _hf_version.setbase
@@ -268,11 +285,11 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     # and would restore nothing hydra-fast owns.
     from hydra_fast.core import singleton as _hf_singleton
 
-    singleton_module = types.ModuleType("hydra.core.singleton")
+    singleton_module = _module("hydra.core.singleton")
     singleton_module.Singleton = _hf_singleton.Singleton
     hydra_core.singleton = singleton_module
 
-    parser_types = types.ModuleType("hydra.core.override_parser.types")
+    parser_types = _module("hydra.core.override_parser.types")
     for name in (
         "Override",
         "OverrideType",

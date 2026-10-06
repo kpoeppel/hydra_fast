@@ -92,9 +92,7 @@ class OmegaConf:
             if isinstance(data, list):
                 return ListConfig._hf_adopt(data)
             if not isinstance(data, dict):
-                raise ValidationError(
-                    f"Unexpected YAML content type: {type(data).__name__}"
-                )
+                raise ValidationError(f"Unexpected YAML content type: {type(data).__name__}")
             return DictConfig._hf_adopt(data)
         if isinstance(obj, dict):
             return DictConfig._hf_adopt(
@@ -538,9 +536,7 @@ def _merge_with_dotlist(self: Any, dotlist: Sequence[str]) -> None:
             value = yaml_type_of(raw)
         # force_add only when the config is not in struct mode: a dotlist
         # naming an undeclared key must raise there, as it does in omegaconf.
-        OmegaConf.update(
-            self, key, value, merge=True, force_add=not self._get_flag("struct")
-        )
+        OmegaConf.update(self, key, value, merge=True, force_add=not self._get_flag("struct"))
 
 
 def _merge_with(self: Any, *others: Any) -> None:
@@ -695,9 +691,7 @@ def _descent_index(part: Any) -> int:
     try:
         return int(part)
     except (TypeError, ValueError):
-        raise TypeError(
-            f"Index '{part}' ({type(part).__name__}) is not an int"
-        ) from None
+        raise TypeError(f"Index '{part}' ({type(part).__name__}) is not an int") from None
 
 
 def _check_list_index(
@@ -716,9 +710,7 @@ def _check_list_index(
     from .errors import decorate
 
     full_key, object_type = _describe(cfg._hf_root, prefix + (position,))
-    raise decorate(
-        ConfigIndexError("list index out of range"), full_key, object_type
-    )
+    raise decorate(ConfigIndexError("list index out of range"), full_key, object_type)
 
 
 def _struct_error(cfg: Any, path: Tuple[Any, ...]) -> Exception:
@@ -765,9 +757,9 @@ def _resolve_in_place(
                 resolved = _resolve_inner(root, child, value, memo, active)
                 if isinstance(resolved, Container):
                     resolved = resolved._hf_container()
-                data[key] = copy.deepcopy(resolved) if isinstance(
-                    resolved, (dict, list)
-                ) else resolved
+                data[key] = (
+                    copy.deepcopy(resolved) if isinstance(resolved, (dict, list)) else resolved
+                )
     elif isinstance(data, list):
         for index, value in enumerate(data):
             child = path + (index,)
@@ -777,9 +769,9 @@ def _resolve_in_place(
                 resolved = _resolve_inner(root, child, value, memo, active)
                 if isinstance(resolved, Container):
                     resolved = resolved._hf_container()
-                data[index] = copy.deepcopy(resolved) if isinstance(
-                    resolved, (dict, list)
-                ) else resolved
+                data[index] = (
+                    copy.deepcopy(resolved) if isinstance(resolved, (dict, list)) else resolved
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -807,9 +799,8 @@ class flag_override:
         self.config._set_flag(self.names, self.values)
         return self.config
 
-    def __exit__(self, *_exc: Any) -> bool:
+    def __exit__(self, *_exc: Any) -> None:
         self.config._set_flag(self.names, self.previous)
-        return False
 
 
 class read_write:
@@ -822,9 +813,8 @@ class read_write:
         self.config._set_flag("readonly", False)
         return self.config
 
-    def __exit__(self, *_exc: Any) -> bool:
+    def __exit__(self, *_exc: Any) -> None:
         self.config._set_flag("readonly", self.previous)
-        return False
 
 
 class open_dict:
@@ -839,6 +829,5 @@ class open_dict:
         self.config._set_flag("struct", False)
         return self.config
 
-    def __exit__(self, *_exc: Any) -> bool:
+    def __exit__(self, *_exc: Any) -> None:
         self.config._set_flag("struct", self.previous)
-        return False
