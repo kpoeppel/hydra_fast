@@ -163,17 +163,27 @@ class ConfigSource:
 # ---------------------------------------------------------------------------
 # defaults list parsing
 # ---------------------------------------------------------------------------
+#: Distinguishes "the key is absent" from "the key is present and empty".
+#: `defaults:` with nothing after it parses as None, which is an error -- but
+#: a config with no `defaults` key at all is perfectly normal.
+_NO_DEFAULTS_KEY = object()
+
+
 def _parse_defaults(data: Any, config_path: str) -> Optional[List[InputDefault]]:
     """Turn a ``defaults:`` block of plain data into ``InputDefault`` objects."""
     if not isinstance(data, dict):
         return None
-    raw = data.get("defaults")
-    if raw is None:
+    raw = data.get("defaults", _NO_DEFAULTS_KEY)
+    if raw is _NO_DEFAULTS_KEY:
         return None
     if not isinstance(raw, list):
-        raise ConfigCompositionException(
-            f"Invalid defaults list in '{config_path}', expected a list, "
-            f"got {type(raw).__name__}"
+        # ValueError, not ConfigCompositionException: that is what hydra
+        # raises here, and the type is part of the contract. `defaults:` left
+        # empty lands here as NoneType rather than being treated as absent.
+        type_str = "mapping" if isinstance(raw, dict) else type(raw).__name__
+        raise ValueError(
+            f"Invalid defaults list in '{config_path}', defaults must be a list"
+            f" (got {type_str})"
         )
 
     out: List[InputDefault] = []
@@ -275,14 +285,17 @@ def _parse_default_item(item: Any, index: int, config_path: str) -> InputDefault
 
 
 @_cache.memoize("source_defaults")
-def _cached_defaults(path: str, fingerprint: Any) -> Optional[List[InputDefault]]:
+def _cached_defaults(
+    path: str, fingerprint: Any, config_path: str = ""
+) -> Optional[List[InputDefault]]:
     """Parse one file's defaults list, memoized on (path, file identity).
 
     ``fingerprint`` is only in the key -- it is what makes the entry go stale
-    when the file is edited.
+    when the file is edited. ``config_path`` is the *config name*, which is
+    what an error message should name rather than the filesystem path.
     """
     data = load_yaml_file(path)
-    return _parse_defaults(data, path)
+    return _parse_defaults(data, config_path or path)
 
 
 def _fingerprint_for(path: str) -> Any:
@@ -323,7 +336,7 @@ class FileConfigSource(ConfigSource):
         text = _cache.read_text(full_path)
         header = _cached_header(text)
         data = load_yaml_file(full_path)
-        defaults_list = _cached_defaults(full_path, fingerprint)
+        defaults_list = _cached_defaults(full_path, fingerprint, config_path)
 
         # The cached dict is shared; composition mutates what it gets, and the
         # `defaults` key is consumed separately, so hand over a copy without it.

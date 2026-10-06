@@ -140,12 +140,15 @@ def _make_omegaconf_module() -> "Tuple[Any, Any, Any, Any]":
     utils_module = _module("omegaconf._utils")
     from hydra_fast import _structured as _hf_structured
     from hydra_fast import _yaml as _hf_yaml
+    from hydra_fast.compat import oc_utils as _oc_utils
     from hydra_fast.grammar import functions as _hf_funcs
 
     utils_module.is_structured_config = _hf_structured.is_structured
     utils_module.type_str = _hf_funcs.type_str
     utils_module.get_yaml_loader = _hf_yaml.get_yaml_loader
     utils_module.nullcontext = __import__("contextlib").nullcontext
+    for _name in _oc_utils.PROVIDED:
+        setattr(utils_module, _name, getattr(_oc_utils, _name))
     utils_module.__doc__ = (
         "Partial stand-in for omegaconf._utils. Only the handful of helpers "
         "that third-party code imports are provided; this module is private "

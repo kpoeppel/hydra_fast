@@ -233,3 +233,113 @@ def test_a_sweep_over_this_tree_parses_each_file_once():
     )
     # 40 points differing only in value overrides share one merge
     assert stats["compose_hit"] >= 39, stats
+
+
+# ---------------------------------------------------------------------------
+# Scale. The tree above is realistic in *shape*; a production tree is also
+# large (the one this is modelled on has 236 files and ~30 resolvers), and
+# size is what the caching and the defaults-list walk actually have to cope
+# with. Generated rather than committed, so it costs no repository weight.
+# ---------------------------------------------------------------------------
+def _large_tree(root: Path, groups: int = 12, options: int = 6, depth: int = 3) -> Path:
+    """A tree with `groups` groups, nested `depth` levels, plus a deep chain."""
+    root.mkdir(parents=True, exist_ok=True)
+    names = [f"g{index:02d}" for index in range(groups)]
+
+    for position, group in enumerate(names):
+        # every third group is nested one level deeper, as real trees are
+        nested = f"{group}/sub" if position % 3 == 0 else group
+        for option in range(options):
+            path = root / nested / f"o{option}.yaml"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            package = nested.replace("/", ".")
+            path.write_text(
+                f"# @package {package}\n"
+                f"kind: o{option}\n"
+                f"index: {option}\n"
+                # a relative reference and one reaching the root
+                f"doubled: ${{multiply:${{.index}},2}}\n"
+                f"tagged: ${{join_path:${{run_id}},{group},o{option}}}\n"
+            )
+
+    selections = "".join(
+        f"  - {group}/sub: o0\n" if position % 3 == 0 else f"  - {group}: o0\n"
+        for position, group in enumerate(names)
+    )
+    # a chain of configs each pulling in the next, to exercise depth
+    for level in range(depth):
+        # The last link has no `defaults:` key at all -- an empty one is an
+        # error, in hydra and here alike (tests/test_defaults_list.py pins it).
+        nxt = f"defaults:\n  - chain{level + 1}\n" if level + 1 < depth else ""
+        (root / f"chain{level}.yaml").write_text(
+            f"# @package _global_\n{nxt}level{level}: {level}\n"
+        )
+    (root / "big.yaml").write_text(
+        "defaults:\n" + selections + "  - chain0\n  - _self_\n"
+        "revision: '7'\nrun_id: ${pad:${revision},5}\n"
+    )
+    return root
+
+
+@pytest.fixture(scope="module")
+def large_tree(tmp_path_factory):
+    return _large_tree(tmp_path_factory.mktemp("large"))
+
+
+def _compose_at(engine: str, where: str, name: str, overrides: List[str]):
+    if engine == "hydra-fast":
+        from hydra_fast import OmegaConf, compose, initialize_config_dir
+    else:
+        from hydra import compose, initialize_config_dir
+        from omegaconf import OmegaConf
+
+    realistic_targets.register(OmegaConf)
+    with initialize_config_dir(version_base=None, config_dir=where):
+        cfg = compose(config_name=name, overrides=overrides)
+    return OmegaConf.to_container(cfg, resolve=True)
+
+
+LARGE_CASES = [
+    [],
+    ["g01=o3"],
+    ["g00/sub=o2"],
+    ["g01=o3", "g02=o4", "g04=o1"],
+    ["++revision=9"],
+    ["++g01.index=99"],
+    ["~g05"],
+]
+
+
+def test_large_tree_composes(large_tree):
+    out = _compose_at("hydra-fast", str(large_tree), "big", [])
+    assert out["level0"] == 0 and out["level2"] == 2, "the chain composed"
+    assert out["g00"]["sub"]["kind"] == "o0", "nested group landed in its package"
+    assert out["g01"]["doubled"] == 0
+    assert out["run_id"] == "00007"
+
+
+@requires_hydra
+@pytest.mark.parametrize(
+    "overrides", LARGE_CASES, ids=["_".join(o) or "plain" for o in LARGE_CASES]
+)
+def test_large_tree_matches_hydra(large_tree, overrides):
+    where = str(large_tree)
+    assert _compose_at("hydra-fast", where, "big", list(overrides)) == _compose_at(
+        "hydra", where, "big", list(overrides)
+    )
+
+
+def test_large_sweep_parses_each_file_once(large_tree):
+    import hydra_fast
+
+    hydra_fast.clear_caches()
+    where = str(large_tree)
+    for index in range(30):
+        out = _compose_at(
+            "hydra-fast", where, "big", [f"++revision={index}", f"g01=o{index % 6}"]
+        )
+        assert out["run_id"] == str(index).zfill(5)
+
+    files = len(list(large_tree.rglob("*.yaml")))
+    misses = hydra_fast.cache_stats()["load_yaml_miss"]
+    assert misses <= files, f"{misses} parses for {files} files across 30 points"

@@ -800,13 +800,24 @@ class _Mismatch(Exception):
 
 
 class _OvParser:
-    __slots__ = ("tokens", "pos", "source", "functions", "_committed", "_predicting_from")
+    __slots__ = (
+        "tokens",
+        "pos",
+        "source",
+        "functions",
+        "_committed",
+        "_predicting_from",
+        "_dry_run",
+    )
 
     def __init__(self, tokens: _TokenStream, source: str, functions: Any = None) -> None:
         self.tokens = tokens
         self.pos = 0
         self.source = source
         self._committed = False
+        # While set, the grammar is walked without *evaluating* anything --
+        # see `parse_simple_choice_sweep`.
+        self._dry_run = False
         # Token index the innermost *active* prediction started at, if any.
         # A span reported by a failing prediction runs from here, so an error
         # inside a function argument names the whole value being predicted
@@ -1059,10 +1070,32 @@ class _OvParser:
         return value
 
     def parse_simple_choice_sweep(self) -> Any:
-        """``simpleChoiceSweep: element (COMMA element)+``"""
+        """``simpleChoiceSweep: element (COMMA element)+``
+
+        The `+` is checked before anything is evaluated. hydra builds a parse
+        tree and evaluates it afterwards in a visitor, so a sweep with no comma
+        fails on the missing COMMA even when its single element would also have
+        failed to evaluate: `choice()` reports "mismatched input '<EOF>'
+        expecting COMMA", not "empty choice is not legal".
+
+        Reproducing that means walking the first element without evaluating it,
+        to find where it ends, then re-walking for real once the comma is
+        known to be there. Only this rule needs it, and only one element is
+        walked twice.
+        """
+        start = self.pos
+        self._dry_run = True
+        try:
+            self.parse_element()
+            after_first = self.pos
+        finally:
+            self._dry_run = False
+            self.pos = start
+
+        if self.tokens.at(after_first).type != COMMA:
+            raise self.report(_Mismatch(after_first, COMMA))
+
         items = [self.parse_element()]
-        if self.peek() != COMMA:
-            raise self.report(self.mismatch(COMMA))
         while self.peek() == COMMA:
             self.advance()
             items.append(self.parse_element())
@@ -1230,6 +1263,11 @@ class _OvParser:
 
         from .functions import FunctionCall
 
+        if self._dry_run:
+            # Walking only: hydra's parser builds the call's tree and leaves
+            # evaluation to the visitor, so a dry run must not evaluate either.
+            return None
+
         registry = self.functions if self.functions is not None else default_functions()
         try:
             return registry.eval(FunctionCall(name=name, args=args, kwargs=kwargs))
@@ -1260,7 +1298,7 @@ class _OvParser:
             pieces.append((token.type, token.text))
         if not pieces:
             raise self.mismatch(_FIRST_PRIMITIVE)
-        if all(ttype == WS for ttype, _ in pieces):
+        if all(ttype == WS for ttype, _ in pieces) and not self._dry_run:
             raise HydraException("Trying to parse a primitive that is all whitespaces")
         # Leading and trailing whitespace is not part of the value.
         while pieces and pieces[0][0] == WS:
@@ -1278,7 +1316,7 @@ class _OvParser:
             pieces.append((token.type, token.text))
         if not pieces:
             raise self.mismatch(_FIRST_DICT_KEY | extra)
-        if all(ttype == WS for ttype, _ in pieces):
+        if all(ttype == WS for ttype, _ in pieces) and not self._dry_run:
             raise HydraException("Trying to parse a primitive that is all whitespaces")
         while pieces and pieces[-1][0] == WS:
             pieces.pop()

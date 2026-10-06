@@ -421,6 +421,24 @@ def make_reference_list(items: List[str], base: _Root) -> "ListConfig":
     return ListConfig._hf_view(root, ())
 
 
+def _cached_view(root: _Root, path: Tuple[Any, ...], value: Any) -> Any:
+    """An identity-stable container view, shared with the ValueNode cache.
+
+    A path holds either a scalar or a container, never both, so one cache
+    serves both -- but the kind is re-checked, because a key can be reassigned
+    from a dict to a list (or to a scalar) and a stale view would then point
+    at the wrong shape.
+    """
+    cache = root.node_cache
+    wanted = DictConfig if isinstance(value, dict) else ListConfig
+    found = cache.get(path)
+    if type(found) is wanted:
+        return found
+    view = wanted._hf_view(root, path)
+    cache[path] = view
+    return view
+
+
 def _wrap(root: _Root, path: Tuple[Any, ...]) -> Any:
     node = _select_raw(root.data, path)
     if isinstance(node, dict):
@@ -443,6 +461,25 @@ class Container(Node):
 
     _hf_root: _Root
     _hf_path: Tuple[Any, ...]
+
+    def _value(self) -> Any:
+        """The plain contents, as omegaconf's containers return.
+
+        Code that reached a container through ``_get_node`` calls this without
+        knowing whether it holds a scalar or a container, so both have to
+        answer it.
+        """
+        return self._hf_container()
+
+    def _is_optional(self) -> bool:
+        """Containers are optional unless a schema says otherwise."""
+        if self._hf_root.types is None:
+            return True
+        from ._typing import lookup
+        from .nodes import _is_optional as annotation_is_optional
+
+        annotation = lookup(self._hf_root.types, self._hf_path)
+        return True if annotation is None else annotation_is_optional(annotation)
 
     def __getitem__(self, key: Any) -> Any:
         """Declared here because both subclasses implement it.
@@ -803,10 +840,13 @@ class DictConfig(Container):
             return None
         path = self._hf_path + (key,)
         value = data[key]
-        if isinstance(value, dict):
-            return DictConfig._hf_view(self._hf_root, path)
-        if isinstance(value, list):
-            return ListConfig._hf_view(self._hf_root, path)
+        if isinstance(value, (dict, list)):
+            # Cached, because omegaconf stores its child nodes in the parent and
+            # so returns the same object every time -- and code does compare
+            # nodes by identity. Only this path caches: a view built by
+            # ordinary access stays a fresh two-slot object, which is what
+            # makes attribute access cheap.
+            return _cached_view(self._hf_root, path, value)
         from .nodes import node_for
 
         return node_for(self._hf_root, path)

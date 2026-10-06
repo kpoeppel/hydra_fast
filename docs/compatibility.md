@@ -25,24 +25,31 @@ What that rests on:
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
 | Defaults List audit: 40 cases over `_self_` placement, `override` at depth, deletions, `optional`, package rebinding, interpolated group names | **40/40** (results, errors *and* warnings) |
 | `instantiate` / `_target_` oracle | **34/34** |
-| syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
+| syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **459/459** message text |
+| private-surface audit: node layer and `omegaconf._utils` | **174/174** node probes, **75/75** `_utils` probes |
 | hydra-fast's own suite | **915 tests**; what skips depends on what is installed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
 
-Two honest limits remain:
+One honest limit remains:
 
-1. **Parse trees do not exist**, so omegaconf's `test_grammar.py` -- which
-   asserts against ANTLR `ParserRuleContext` objects -- cannot run. Its corpus
-   is covered through the public API instead (row 2 above). The two things a
-   tree is actually *used* for are both available: see
-   [docs/architecture.md](architecture.md#what-replaces-the-parse-tree).
-2. **Deep private internals are partial.** `omegaconf._utils` and the node
-   layer are shimmed for the names libraries actually import (see *Internals*
-   below), but `omegaconf.base`, `omegaconf.basecontainer`, `omegaconf._impl`
-   and the rest are not. Those are private in omegaconf and have no stable
-   contract.
+**Parse trees do not exist**, so omegaconf's `test_grammar.py` -- which
+asserts against ANTLR `ParserRuleContext` objects -- cannot run. Its corpus is
+covered through the public API instead (row 2 above). The two things a tree is
+actually *used* for are both available: see
+[docs/architecture.md](architecture.md#what-replaces-the-parse-tree).
+
+The private surface used to be listed here as a second limit, vaguely
+("partial"). It is now enumerated and measured by `bench/oracle_internals.py`:
+the node layer matches on **174/174** probes, and the `omegaconf._utils`
+helpers that answer a question about a value or an annotation match on
+**75/75**. What is still absent is listed by that audit on every run, and
+falls into three groups: stdlib and typing re-exports (`os`, `re`, `Dict`),
+error classes available on `omegaconf` itself, and plumbing for omegaconf's
+own node graph, which hydra-fast does not have. `omegaconf.base`,
+`omegaconf.basecontainer` and `omegaconf._impl` remain unshimmed for the same
+reason.
 
 ## Covered and differentially tested
 
@@ -300,18 +307,13 @@ the rest of the input. `bench/oracle_errors.py` measures it against real
 ANTLR: 744/744 inputs accepted-or-rejected identically, 455/459 messages
 character-identical.
 
-The four that differ share one cause. Hydra parses to a tree and raises
-*semantic* errors while visiting it, so a malformed fragment fails at parse
-time before any function is evaluated. hydra-fast evaluates during the parse,
-so where the parse would *also* have failed it reports the evaluation error
-rather than the parse error:
-
-    OverridesParser().parse_rule("choice()", "simpleChoiceSweep")
-    # hydra:      mismatched input '<EOF>' expecting COMMA
-    # hydra-fast: ValueError while evaluating 'choice()': empty choice is not legal
-
-Both reject; only the phrasing differs, and only for fragment rules parsed in
-isolation. Whenever the parse succeeds, behaviour is identical.
+Four cases used to differ, all one cause: hydra parses to a tree and raises
+*semantic* errors while visiting it, so `choice()` as a `simpleChoiceSweep`
+fails on the missing comma before the empty choice is ever evaluated, while
+hydra-fast evaluated during the parse and reported the evaluation error.
+`simpleChoiceSweep` now walks its first element without evaluating anything,
+to find where it ends, and only re-walks for real once the comma is known to
+be there -- so the message is hydra's. The corpus is at 459/459.
 
 ### YAML dump formatting
 

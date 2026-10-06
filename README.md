@@ -121,14 +121,14 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-912 passed, 3 skipped
+1001 passed, 3 skipped
 ```
 
-915 tests. What skips depends on what is installed: three need
-compoconf 0.3.1+, twelve need the private `oellm-autoexp` tree, and the
-upstream-suite tests need the source checkouts fetched (see *Running the
-differential tests*). Set `HYDRA_FAST_REQUIRE_UPSTREAM=1` to turn the last
-group's skips into errors, as CI does.
+1004 tests, and **no test needs anything outside the repository**. The three
+that skip above need compoconf 0.3.1+, which CI installs. The upstream-suite
+tests need the hydra and omegaconf source checkouts fetched (see *Running the
+differential tests*); `HYDRA_FAST_REQUIRE_UPSTREAM=1` turns those skips into
+errors, as CI does.
 
 - **Upstream suites run against hydra-fast** (`tests/test_upstream.py`):
   hydra's own `test_overrides_parser.py` — **508 cases, fully green**;
@@ -144,15 +144,19 @@ group's skips into errors, as CI does.
 - **Exception types and messages** compared case by case, including omegaconf's
   `full_key`/`object_type` trailer — and, for malformed input, ANTLR's own
   phrasing reproduced without ANTLR: **744/744** inputs accepted or rejected
-  identically and **455/459** messages character-identical across 62 malformed
+  identically and **459/459** messages character-identical across 62 malformed
   inputs x 12 grammar rules (`bench/oracle_errors.py`).
 - **66 override cases** parsed by both Hydra's ANTLR parser and hydra-fast, with
   the full parsed shape compared — type, key, package, value type, value.
 - **33 composition cases** over 12 config trees covering `_self_` ordering,
   `@package` headers, `override`/`optional` keywords, deletions, option lists,
   interpolated group names, nested groups.
-- **12 composition cases** over the real `oellm-autoexp` tree with all its
-  custom resolvers registered.
+- **A realistic config tree that ships with the repository**
+  (`tests/realistic_config/`): nested groups, `# @package` headers named and
+  `_global_`, profiles using `override`, relative and root-reaching
+  interpolations, six custom resolvers, a `_target_`, and a `???` a sweep must
+  fill — twelve override shapes compared against hydra, plus a generated
+  large tree for scale. No private checkout needed.
 - Cache-correctness tests: that a file edited mid-process is picked up, that
   group overrides are not served a cached merge, and that one sweep point's
   overrides cannot leak into another's.

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import warnings
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
@@ -528,6 +529,7 @@ class _Parser:
         """
         items: List[Tuple[Compiled, str]] = []
         previous_was_comma = True
+        sequence_start = self.pos
         while True:
             ttype = self.peek()
             if ttype in stop or ttype == EOF:
@@ -535,6 +537,7 @@ class _Parser:
             if ttype == COMMA:
                 self.advance()
                 if previous_was_comma:
+                    self._warn_missing_element(sequence_start)
                     items.append((_const(""), ""))
                 previous_was_comma = True
                 continue
@@ -548,8 +551,30 @@ class _Parser:
             items.append((element, spelling))
             previous_was_comma = False
         if previous_was_comma and items:
+            # Trailing comma.
+            self._warn_missing_element(sequence_start)
             items.append((_const(""), ""))
         return items
+
+    def _warn_missing_element(self, sequence_start: int) -> None:
+        """omegaconf's deprecation warning for an omitted sequence element.
+
+        ``${oc.env:VAR,}`` means "default to the empty string", and omegaconf
+        has asked for `''` instead since 2.1. Dropping the warning would lose
+        that signal, so it is emitted here -- but at *compile* time rather
+        than per resolution, because the compiled closure is cached on the
+        string. A given malformed interpolation therefore warns once per
+        process instead of once per resolution; Python's default filter
+        collapses omegaconf's repeats to one anyway.
+        """
+        text = "".join(token.text for token in self.tokens[sequence_start : self.pos])
+        warnings.warn(
+            f"In the sequence `{text}` some elements are missing: please replace "
+            f"them with empty quoted strings. "
+            f"See https://github.com/omry/omegaconf/issues/572 for details.",
+            category=UserWarning,
+            stacklevel=2,
+        )
 
     # -- interpolations --------------------------------------------------
     def parse_interpolation(self) -> Compiled:

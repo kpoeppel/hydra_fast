@@ -12,4 +12,13 @@ revision: "0.1"
 label: ${name}-${revision}
 # Environment with a default, the single most common real-world interpolation.
 workspace: ${oc.env:PIPELINE_WORKSPACE,/var/tmp/pipeline}
-outputs: ${workspace}/${label}
+outputs: ${join_path:${workspace},${label}}
+# A resolver taking a container, and one returning one.
+# Quoted, so the commas are part of the argument rather than separators.
+shards: ${to_list:'a,b,c'}
+weights: [1, 2, 3]
+weight_total: ${total:${weights}}
+# Defaults chained through a resolver, and zero-padding for run directories.
+run_id: ${pad:${revision},5}
+# `''` rather than a bare trailing comma: omegaconf deprecated the latter.
+primary: ${first_set:${oc.env:PIPELINE_NAME,''},${name}}

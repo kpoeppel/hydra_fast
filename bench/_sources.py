@@ -72,7 +72,13 @@ def omegaconf_src() -> Optional[Path]:
 
 
 def autoexp_src() -> Optional[Path]:
-    """The oellm-autoexp config tree -- the real-world composition case."""
+    """The oellm-autoexp config tree, for the benchmarks only.
+
+    No *test* depends on this: ``tests/realistic_config/`` is a public tree of
+    the same shape, and ``tests/test_realistic_tree.py`` generates a large one
+    for scale. This stays because ``bench/bench_compose.py`` quotes the
+    headline figure from the real tree, which is opt-in.
+    """
     return _locate("OELLM_AUTOEXP", directory="oellm-autoexp", marker="config")
 
 

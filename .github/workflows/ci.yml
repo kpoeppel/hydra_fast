@@ -131,6 +131,8 @@ jobs:
         run: python bench/oracle_instantiate.py
       - name: Defaults List algorithm
         run: python bench/oracle_defaults_list.py
+      - name: Private omegaconf surface (_utils, node layer)
+        run: python bench/oracle_internals.py
 
   package:
     # Builds the wheel and exercises it from a clean environment, which is the

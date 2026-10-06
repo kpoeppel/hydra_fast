@@ -93,6 +93,12 @@ TREE: Dict[str, str] = {
     "missing_option.yaml": "defaults:\n  - a: nope\n  - _self_\n",
     "missing_group.yaml": "defaults:\n  - nosuch: x\n  - _self_\n",
     "override_absent.yaml": "defaults:\n  - override a: one\n  - _self_\n",
+    # `defaults:` with nothing after it parses as None, which is an error --
+    # a config with no `defaults` key at all is not.
+    "defaults_empty.yaml": "defaults:\nv: 1\n",
+    "defaults_mapping.yaml": "defaults:\n  a: 1\nv: 1\n",
+    "defaults_scalar.yaml": "defaults: 5\nv: 1\n",
+    "defaults_absent.yaml": "v: 1\n",
 }
 
 #: (config_name, overrides)
@@ -139,6 +145,11 @@ CASES: List[Tuple[str, List[str]]] = [
     ("self_last", ["+b=one"]),
     ("self_last", ["+c=one"]),
     ("ordered", ["~c"]),
+    # the shape of the defaults block itself
+    ("defaults_absent", []),
+    ("defaults_empty", []),
+    ("defaults_mapping", []),
+    ("defaults_scalar", []),
     # errors
     ("dup_group", []),
     ("missing_option", []),

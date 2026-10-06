@@ -168,6 +168,13 @@ class ValueNode:
         return view_type._hf_view(self._hf_root, parent_path)
 
     # -- behaving like the value ------------------------------------------
+    #
+    # Deliberately no `__bool__`: omegaconf's ValueNode has none either, so a
+    # node is always truthy regardless of the value it holds. That matters,
+    # because `_get_node` returns None for an absent key -- so
+    # `if cfg._get_node(k):` is how omegaconf code asks whether a key exists,
+    # and a `__bool__` reflecting the value silently breaks it for anything
+    # holding 0, "", False or None.
     def __eq__(self, other: Any) -> Any:
         if isinstance(other, ValueNode):
             return self._raw() == other._raw()
@@ -183,9 +190,6 @@ class ValueNode:
             return hash(value)
         except TypeError:  # pragma: no cover - unhashable stored value
             return id(self)
-
-    def __bool__(self) -> bool:
-        return bool(self._raw())
 
     def __str__(self) -> str:
         return str(self._raw())
