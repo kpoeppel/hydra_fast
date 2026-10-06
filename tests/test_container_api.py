@@ -283,6 +283,58 @@ def test_struct_error_through_a_list_renders_the_index_in_brackets():
     with pytest.raises(ConfigAttributeError) as err:
         OmegaConf.update(cfg, "i.2.b", 2)
     assert err.value.full_key == "i[2].b"
+
+
+def test_containers_register_as_their_abcs():
+    """Code written against omegaconf branches on the collections.abc ABCs.
+
+    omegaconf's containers inherit MutableMapping / MutableSequence. These
+    implement the same protocols without deriving from them, so without
+    registration a resolver doing `isinstance(arg, Mapping)` silently skipped
+    every DictConfig argument it was handed.
+    """
+    from collections.abc import (
+        Mapping,
+        MutableMapping,
+        MutableSequence,
+        Sequence,
+    )
+
+    cfg = OmegaConf.create({"a": 1})
+    lst = OmegaConf.create([1, 2])
+
+    # One assert per ABC, deliberately: `isinstance(x, (A, B))` is an OR, and
+    # Sized/Iterable/Container match structurally off __len__/__iter__ already,
+    # so a tuple here would pass with no registration at all.
+    assert isinstance(cfg, Mapping)
+    assert isinstance(cfg, MutableMapping)
+    assert isinstance(lst, Sequence)
+    assert isinstance(lst, MutableSequence)
+    assert not isinstance(cfg, Sequence)
+    assert not isinstance(lst, Mapping)
+    # Registration, not inheritance: the two-slot layout has to survive, so no
+    # ABC may appear in the MRO and no instance may grow a __dict__.
+    assert not hasattr(cfg, "__dict__")
+    assert not hasattr(lst, "__dict__")
+    assert MutableMapping not in DictConfig.__mro__
+    assert MutableSequence not in ListConfig.__mro__
+
+
+@requires_omegaconf
+def test_abc_registration_matches_omegaconf():
+    from collections.abc import Mapping, MutableMapping, MutableSequence, Sequence
+
+    import omegaconf
+
+    for abc in (Mapping, MutableMapping, Sequence, MutableSequence):
+        assert isinstance(OmegaConf.create({"a": 1}), abc) == isinstance(
+            omegaconf.OmegaConf.create({"a": 1}), abc
+        )
+        assert isinstance(OmegaConf.create([1]), abc) == isinstance(
+            omegaconf.OmegaConf.create([1]), abc
+        )
+
+
 def test_list_mutation():
     cfg = OmegaConf.create([1, 2])
     cfg.append(3)

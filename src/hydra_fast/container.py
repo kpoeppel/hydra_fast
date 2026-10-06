@@ -17,6 +17,7 @@ access, through the compiled closures in :mod:`hydra_fast.grammar`.
 from __future__ import annotations
 
 import copy
+from collections.abc import MutableMapping, MutableSequence
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from ._copy import fast_deepcopy
@@ -1080,3 +1081,20 @@ class ListConfig(Container):
         return not result
 
     __hash__ = None  # type: ignore[assignment]
+
+
+# Both containers implement their protocol in full -- DictConfig has
+# __getitem__/__setitem__/__delitem__/__iter__/__len__/__contains__ plus
+# keys/values/items/get/pop/setdefault/update/clear, ListConfig the
+# MutableSequence equivalents -- but they derive from Node rather than
+# collections.abc, so `isinstance(cfg, Mapping)` was False.
+#
+# omegaconf's containers inherit MutableMapping / MutableSequence, so code
+# written against omegaconf branches on those ABCs. A custom resolver doing
+# `isinstance(arg, Mapping)` over its arguments silently skipped every
+# DictConfig it was handed and returned an empty result -- no error, just a
+# wrong answer. Registering is what keeps that code working while leaving the
+# two-slot layout, the MRO and the metaclass untouched: it adds no mixin
+# methods and costs nothing at runtime.
+MutableMapping.register(DictConfig)
+MutableSequence.register(ListConfig)
