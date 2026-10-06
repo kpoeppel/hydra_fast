@@ -56,6 +56,8 @@ compoconf = ["compoconf>=0.1.16"]
 
 [project.urls]
 Homepage = "https://github.com/kpoeppel/hydra_fast"
+Repository = "https://github.com/kpoeppel/hydra_fast"
+Changelog = "https://github.com/kpoeppel/hydra_fast/blob/main/CHANGELOG.md"
 Issues = "https://github.com/kpoeppel/hydra_fast/issues"
 
 [tool.setuptools]

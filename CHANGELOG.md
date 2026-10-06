@@ -1,5 +1,11 @@
 # Changelog
 
+Releases are published to PyPI by `.github/workflows/release.yml` when a
+GitHub Release is published. To cut one: bump `version` in `pyproject.toml`,
+add the section below, tag `vX.Y.Z`, push the tag, then publish the Release.
+The workflow re-runs the full test suite against the tagged commit and refuses
+to upload if the tag and the packaged version disagree.
+
 ## 0.1.0
 
 First release.

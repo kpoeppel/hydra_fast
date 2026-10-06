@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kpoeppel/hydra_fast/actions/workflows/ci.yml/badge.svg)](https://github.com/kpoeppel/hydra_fast/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/hydra-fast/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green)](https://github.com/kpoeppel/hydra_fast/blob/main/LICENSE)
 
 Hydra-compatible config composition, built for the case Hydra is slowest at:
 composing the same config tree hundreds of times to build a parameter sweep.
@@ -21,7 +21,7 @@ It reimplements the composition and interpolation core, not job launching,
 sweeper plugins or `instantiate`. Within that scope it is validated against the
 real packages — including running **hydra's own override-grammar suite** and
 **omegaconf's own grammar corpus** against it.
-[docs/compatibility.md](docs/compatibility.md) is explicit about the boundary.
+[docs/compatibility.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/compatibility.md) is explicit about the boundary.
 
 ## The numbers
 
@@ -53,13 +53,13 @@ lookup, so a config edited mid-process is picked up — costs nothing measurable
 here: best-of-5 over this sweep gives 2.72 ms/point with validation and
 2.78 ms/point without. The validation work is amortized to a handful of
 `stat()` calls per composition (see
-[docs/architecture.md](docs/architecture.md)), so there is no safety-for-speed
+[docs/architecture.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/architecture.md)), so there is no safety-for-speed
 trade to make. Keep the default.
 
 [^1]: `oellm-autoexp` ships seven monkeypatched cache layers over Hydra
     (`hydra_staged_sweep/config/cache.py`). hydra-fast is ~25x faster than
     that, because caching alone cannot get past Hydra's object model — see
-    [docs/architecture.md](docs/architecture.md).
+    [docs/architecture.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/architecture.md).
 
 Across repeated runs on a shared machine the speedup landed between **60x and
 130x**, with the low end being runs where the box was busy. Treat ~100x as the
@@ -85,7 +85,7 @@ reporting a time.
 
 ## Why it is faster
 
-Three things, in rough order of impact. [docs/architecture.md](docs/architecture.md)
+Three things, in rough order of impact. [docs/architecture.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/architecture.md)
 has the detail.
 
 **Each file is read and parsed once per process.** Stock Hydra re-reads and
@@ -101,7 +101,7 @@ string. A sweep typically has a few dozen distinct interpolation strings and
 resolves them thousands of times. (Having no parse tree costs nothing
 functionally: parse-once-resolve-many works the same way, and
 `analyze_interpolation()` recovers static introspection — see
-[docs/architecture.md](docs/architecture.md#what-replaces-the-parse-tree).)
+[docs/architecture.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/architecture.md#what-replaces-the-parse-tree).)
 
 **Configs are plain dicts.** OmegaConf wraps every value in a `Node` object
 with its own metadata and parent pointer. A 600-key config is 600+ objects to
@@ -158,7 +158,7 @@ What this still does not prove: omegaconf's `test_grammar.py` asserts against
 ANTLR parse trees, which hydra-fast has none of by design, and several
 omegaconf suites import private internals that are only partially shimmed. Both
 boundaries are itemised in
-[docs/compatibility.md](docs/compatibility.md) — treat it as the contract.
+[docs/compatibility.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/compatibility.md) — treat it as the contract.
 
 ### Running the differential tests
 
@@ -247,7 +247,7 @@ checks could still show up. Measure before switching; the default is safe.
 ## Compatibility
 
 Target is **hydra 1.3 / omegaconf 2.3** — the widely deployed pair.
-[docs/compatibility.md](docs/compatibility.md) lists what is covered, the few
+[docs/compatibility.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/compatibility.md) lists what is covered, the few
 deliberate deviations, and what is out of scope (job launching, sweeper
 plugins, `instantiate`).
 
@@ -277,4 +277,4 @@ directories shadow the installed packages as empty namespace packages;
 MIT. hydra-fast is a derivative work of Hydra (MIT) and OmegaConf (BSD
 3-Clause); the Defaults List algorithm in particular is ported from Hydra
 rather than re-derived, because that algorithm *is* the composition spec. See
-[ATTRIBUTION/](ATTRIBUTION/) for exactly what came from where.
+[ATTRIBUTION/](https://github.com/kpoeppel/hydra_fast/tree/main/ATTRIBUTION) for exactly what came from where.

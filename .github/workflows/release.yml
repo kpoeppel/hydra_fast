@@ -1,18 +1,33 @@
 name: Release
 
-# Publishes to PyPI when a version tag is pushed. Nothing fires on a normal
-# push or pull request.
+# Publishes to PyPI when a GitHub Release is published, via trusted
+# publishing -- no API token is stored anywhere.
 #
-# BEFORE THE FIRST RELEASE: configure a PyPI *trusted publisher* for this
-# repository and the `pypi` environment
-# (https://docs.pypi.org/trusted-publishers/). That is what the `id-token`
-# permission below is for -- no API token or secret is stored anywhere. Until
-# that is set up, the `publish` job will fail at the last step while the build
-# and verification steps still work; use `workflow_dispatch` to rehearse it.
+# BEFORE THE FIRST RELEASE, register the trusted publisher on PyPI. The
+# project does not exist there yet, so this is the "pending publisher" flow:
+#
+#   https://pypi.org/manage/account/publishing/
+#     PyPI project name : hydra-fast
+#     Owner             : kpoeppel
+#     Repository name   : hydra_fast
+#     Workflow name     : release.yml
+#     Environment name  : pypi
+#
+# Then create the `pypi` environment under Settings -> Environments (adding a
+# required reviewer there is worth it: it turns publishing into an explicit
+# approval step).
+#
+# To release:
+#   1. bump `version` in pyproject.toml and note it in CHANGELOG.md
+#   2. git tag vX.Y.Z && git push --tags
+#   3. publish a GitHub Release for that tag
+#
+# `workflow_dispatch` rehearses everything except the upload, so the build and
+# the checks can be exercised before any of the above is in place.
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -20,8 +35,9 @@ permissions:
 
 jobs:
   verify:
-    # Do not publish something that was never tested. This duplicates CI
-    # deliberately: a tag can point at a commit CI never ran on.
+    # Do not publish something that was never tested. A tag can point at a
+    # commit CI never ran on, so the whole suite runs again here against
+    # exactly what is about to be uploaded.
     uses: ./.github/workflows/ci.yml
 
   build:
@@ -33,35 +49,56 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install build twine
+      - run: python -m pip install --upgrade pip build twine
       - run: python -m build
       - run: twine check --strict dist/*
 
-      - name: Check the tag matches the packaged version
-        # A tag that disagrees with pyproject.toml publishes a surprise.
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Verify the tag matches the packaged version
+        # Skipped on workflow_dispatch, where there is no tag to compare.
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          tagged="${GITHUB_REF_NAME#v}"
           packaged=$(python -c 'import sys; sys.path.insert(0, "src"); from hydra_fast.version import __version__; print(__version__)')
-          echo "tag=$tagged packaged=$packaged"
-          test "$tagged" = "$packaged" || {
-            echo "::error::tag $GITHUB_REF_NAME does not match version $packaged"
-            exit 1; }
+          tagged="${GITHUB_REF_NAME#v}"
+          echo "tag=$GITHUB_REF_NAME packaged=$packaged"
+          if [ "$tagged" != "$packaged" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $packaged in pyproject.toml"
+            exit 1
+          fi
+
+      - name: Confirm the builtin config tree is in the distribution
+        # The one package-data regression that no import would catch; it broke
+        # once already. See tests/test_packaging.py.
+        run: |
+          count=$(python -c "
+          import glob, zipfile
+          z = zipfile.ZipFile(glob.glob('dist/*.whl')[0])
+          print(sum(1 for n in z.namelist() if n.startswith('hydra_fast/conf/hydra/') and n.endswith('.yaml')))
+          ")
+          echo "builtin hydra configs in wheel: $count"
+          test "$count" -eq 12 || { echo "::error::expected 12, got $count"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: release-dists
           path: dist/
 
-  publish:
+  pypi-publish:
     needs: build
+    # Only a published Release uploads. A manual dispatch stops after `build`,
+    # so it stays a rehearsal rather than an accidental publish.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
-      id-token: write # trusted publishing; no stored secret
+      # Mandatory for trusted publishing; this is why no secret is needed.
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/hydra-fast
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: release-dists
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
