@@ -1,3 +1,4 @@
+---
 name: Release
 
 # Publishes to PyPI when a GitHub Release is published, via trusted

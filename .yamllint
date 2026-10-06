@@ -3,6 +3,13 @@
 # default profile objects to.
 extends: default
 
+# Hydra's builtin config group, copied verbatim (see ATTRIBUTION/). Editing it
+# to satisfy a linter would break the property that makes it auditable against
+# upstream -- the same reason the two ported Python modules are exempt from
+# ruff.
+ignore: |
+  src/hydra_fast/conf/
+
 rules:
   line-length:
     max: 120
@@ -15,4 +22,5 @@ rules:
   comments:
     min-spaces-from-content: 1
   document-start:
-    present: false
+    # Required, matching the convention the workflow files already use.
+    present: true
