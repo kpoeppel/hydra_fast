@@ -23,6 +23,7 @@ from hydra_fast import (
 )
 from hydra_fast.errors import (
     ConfigAttributeError,
+    ConfigIndexError,
     ConfigKeyError,
     MissingMandatoryValue,
     ReadonlyConfigError,
@@ -187,6 +188,101 @@ def test_update_force_add_in_struct():
     assert cfg.deep.key == 1
 
 
+# A dotted path that continues *through* a list element. The descent used to
+# step into the element unconditionally, so a scalar standing there became the
+# cursor and the next step died on `in`/`.get` with a raw TypeError. omegaconf
+# replaces the scalar with a mapping, exactly as it does for a dict key.
+UPDATE_THROUGH_LIST_CASES = [
+    # (data, path, struct, force_add)
+    ({"i": [0, 1, 2]}, "i.2.b", False, False),
+    ({"i": ["a", "b"]}, "i.0.b", False, False),
+    ({"i": [None]}, "i.0.b", False, False),
+    ({"i": [True]}, "i.0.b", False, False),
+    ({"i": [1.5]}, "i.0.b", False, False),
+    # two new levels below the replaced scalar
+    ({"i": [0]}, "i.0.a.b", False, False),
+    # a container element is descended into, not replaced
+    ({"i": [{"keep": 1}]}, "i.0.b", False, False),
+    ({"i": [[{"x": 0}]]}, "i.0.0.b", False, False),
+    ({"i": [[9]]}, "i.0.0.b", False, False),
+    ({"i": [0, 1, 2]}, "i.-1.b", False, False),
+    # error paths: out of range, non-integer index, struct
+    ({"i": [0]}, "i.5.b", False, False),
+    ({"i": [0]}, "i.x.b", False, False),
+    ({"i": [0, 1, 2]}, "i.2.b", True, False),
+    ({"i": [0, 1, 2]}, "i.2.b", True, True),
+    # the same index handling in the assignment position
+    ({"i": [0, 1]}, "i.1", False, False),
+    ({"i": [0, 1]}, "i.-1", False, False),
+    ({"i": [0]}, "i.5", False, False),
+    ({"i": [0]}, "i.x", False, False),
+]
+
+
+def _update_outcome(api, data, path, struct, force_add):
+    """``update`` through ``api``, as a comparable value or error."""
+    cfg = api.create(copy.deepcopy(data))
+    if struct:
+        api.set_struct(cfg, True)
+    try:
+        api.update(cfg, path, 2, force_add=force_add)
+    except Exception as exc:  # noqa: BLE001 -- the error IS the result here
+        return ("raise", type(exc).__name__, str(exc))
+    return ("ok", api.to_container(cfg))
+
+
+@requires_omegaconf
+@pytest.mark.parametrize(
+    "data,path,struct,force_add",
+    UPDATE_THROUGH_LIST_CASES,
+    ids=range(len(UPDATE_THROUGH_LIST_CASES)),
+)
+def test_update_through_a_list_element_matches_omegaconf(data, path, struct, force_add):
+    """Result *and* error text, against omegaconf as the oracle."""
+    import omegaconf
+
+    assert _update_outcome(OmegaConf, data, path, struct, force_add) == _update_outcome(
+        omegaconf.OmegaConf, data, path, struct, force_add
+    )
+
+
+def test_update_replaces_a_scalar_list_element():
+    """The oracle's answers, pinned so this still runs without omegaconf."""
+    cfg = OmegaConf.create({"i": [0, 1, 2]})
+    OmegaConf.update(cfg, "i.2.b", 2)
+    assert OmegaConf.to_container(cfg) == {"i": [0, 1, {"b": 2}]}
+
+    cfg = OmegaConf.create({"i": [0]})
+    OmegaConf.update(cfg, "i.0.a.b", 2)
+    assert OmegaConf.to_container(cfg) == {"i": [{"a": {"b": 2}}]}
+
+    # a container element is merged into, not replaced
+    cfg = OmegaConf.create({"i": [{"keep": 1}]})
+    OmegaConf.update(cfg, "i.0.b", 2)
+    assert OmegaConf.to_container(cfg) == {"i": [{"keep": 1, "b": 2}]}
+
+
+def test_update_list_index_errors():
+    """A bare IndexError/ValueError must not escape from the descent."""
+    with pytest.raises(ConfigIndexError) as out_of_range:
+        OmegaConf.update(OmegaConf.create({"i": [0]}), "i.5.b", 2)
+    # omegaconf says "index", not "assignment index", in both positions
+    assert "list index out of range" in str(out_of_range.value)
+    assert out_of_range.value.full_key == "i[5]"
+
+    with pytest.raises(ConfigIndexError):
+        OmegaConf.update(OmegaConf.create({"i": [0]}), "i.5", 2)
+
+    with pytest.raises(TypeError, match=r"Index 'x' \(str\) is not an int"):
+        OmegaConf.update(OmegaConf.create({"i": [0]}), "i.x.b", 2)
+
+
+def test_struct_error_through_a_list_renders_the_index_in_brackets():
+    cfg = OmegaConf.create({"i": [0, 1, 2]})
+    OmegaConf.set_struct(cfg, True)
+    with pytest.raises(ConfigAttributeError) as err:
+        OmegaConf.update(cfg, "i.2.b", 2)
+    assert err.value.full_key == "i[2].b"
 def test_list_mutation():
     cfg = OmegaConf.create([1, 2])
     cfg.append(3)

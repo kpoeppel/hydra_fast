@@ -33,6 +33,7 @@ from .container import (
 )
 from .errors import (
     ConfigAttributeError,
+    ConfigIndexError,
     InterpolationResolutionError,
     MissingMandatoryValue,
     ReadonlyConfigError,
@@ -295,14 +296,32 @@ class OmegaConf:
                 object_type,
             )
 
-        for index, part in enumerate(parts[:-1]):
+        # The path is accumulated as it is walked rather than sliced out of
+        # `parts`, because a list index has to enter it as an int: that is what
+        # makes an error about it render as `a[2].b` instead of `a.2.b`.
+        walked: Tuple[Any, ...] = ()
+        for part in parts[:-1]:
             if isinstance(data, list):
-                data = data[int(part)]
+                position = _descent_index(part)
+                _check_list_index(cfg, data, walked, position)
+                walked += (position,)
+                nxt = data[position]
+                if not isinstance(nxt, (dict, list)):
+                    # A scalar standing where the path continues is replaced by
+                    # a mapping, which is what the dict branch below does and
+                    # what omegaconf does for a list element too. Descending
+                    # into it unconditionally made `data` the scalar itself, so
+                    # the next iteration (or the key check further down) failed
+                    # with a raw TypeError/AttributeError out of `in` or `.get`.
+                    nxt = {}
+                    data[position] = nxt
+                data = nxt
                 continue
             nxt = data.get(part, _ABSENT)
+            walked += (part,)
             if nxt is _ABSENT or not isinstance(nxt, (dict, list)):
                 if not force_add and struct and nxt is _ABSENT:
-                    raise _struct_error(cfg, tuple(parts[: index + 1]))
+                    raise _struct_error(cfg, walked)
                 nxt = {}
                 data[part] = nxt
             data = nxt
@@ -310,11 +329,16 @@ class OmegaConf:
         last = parts[-1]
         plain = _coerce_assigned(value)
         if isinstance(data, list):
+            # int() directly, not _descent_index: omegaconf lets the built-in
+            # ValueError out for a non-numeric index in the ASSIGNMENT position
+            # and only raises its own TypeError while descending. Matching that
+            # asymmetry is deliberate.
             index = int(last)
-            data[index] = _coerce_at(cfg, tuple(parts[:-1]) + (index,), plain)
+            _check_list_index(cfg, data, walked, index)
+            data[index] = _coerce_at(cfg, walked + (index,), plain)
             return
         if last not in data and not force_add and struct:
-            raise _struct_error(cfg, tuple(parts))
+            raise _struct_error(cfg, walked + (last,))
         existing = data.get(last)
         if merge and isinstance(existing, dict) and isinstance(plain, dict):
             from .merge import merge_into
@@ -659,6 +683,42 @@ def _instantiate_structured(container: Any, storage: Any) -> Any:
             for index, value in enumerate(container)
         ]
     return container
+
+
+def _descent_index(part: Any) -> int:
+    """A list index from a key segment, while walking *into* a config.
+
+    omegaconf reports a non-integer index hit on the way down as a plain
+    ``TypeError`` naming the offending segment, not as the ``ValueError``
+    ``int()`` would raise.
+    """
+    try:
+        return int(part)
+    except (TypeError, ValueError):
+        raise TypeError(
+            f"Index '{part}' ({type(part).__name__}) is not an int"
+        ) from None
+
+
+def _check_list_index(
+    cfg: Any, data: List[Any], prefix: Tuple[Any, ...], position: int
+) -> None:
+    """Reject an out-of-range list index the way omegaconf does.
+
+    A bare ``IndexError`` would escape otherwise. omegaconf raises a decorated
+    ``ConfigIndexError`` carrying ``full_key``/``object_type``, and its message
+    is "list index out of range" in both positions -- including when assigning,
+    where the built-in says "list assignment index out of range".
+    """
+    if -len(data) <= position < len(data):
+        return
+    from .container import _describe
+    from .errors import decorate
+
+    full_key, object_type = _describe(cfg._hf_root, prefix + (position,))
+    raise decorate(
+        ConfigIndexError("list index out of range"), full_key, object_type
+    )
 
 
 def _struct_error(cfg: Any, path: Tuple[Any, ...]) -> Exception:
