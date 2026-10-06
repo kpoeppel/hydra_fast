@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Reference source checkouts at the repository root. Anchored with a leading
+# slash: unanchored, these also match src/hydra_fast/conf/hydra/, which is
+# hydra-fast's own builtin config tree and must be committed.
+/hydra/
+/omegaconf/
+
+# Source trees the differential checks compare against; see bench/_sources.py
+/.upstream/

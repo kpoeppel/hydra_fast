@@ -1,0 +1,106 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hydra-fast"
+version = "0.1.0"
+description = "Hydra-compatible config composition, 10-100x faster, with process-wide file caching"
+readme = "README.md"
+# 3.10-3.13 are the versions the test suite is run against.
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "the hydra-fast authors" }]
+keywords = ["hydra", "omegaconf", "configuration", "yaml", "sweep", "hyperparameter"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+  # Linux and macOS are POSIX-equivalent for what this does; Windows is
+  # untested (path handling, WindowsPath constructors) so it is not claimed.
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+]
+dependencies = [
+  # The only hard dependency. Install PyYAML built with libyaml for the fast
+  # C scanner; hydra-fast detects it and falls back cleanly if absent.
+  "PyYAML>=5.1",
+]
+
+[project.optional-dependencies]
+# Needed only to run the differential tests, which compare every result
+# against the real hydra and omegaconf.
+test = [
+  # Upper bound is not caution: hydra 1.3's own `test_overrides_parser.py`,
+  # which this project runs verbatim as its strongest check, imports
+  # `_pytest.python_api.RaisesContext`. That private moved in pytest 8.4, so
+  # a newer pytest makes the module unimportable and the whole 508-case suite
+  # silently skips. Revisit only with a way to keep that suite running.
+  "pytest>=7.0,<8.4",
+  "hydra-core>=1.3,<1.4",
+  "omegaconf>=2.3,<2.4",
+]
+attrs = ["attrs>=21.0"]
+# compoconf types configs after composition, from the plain dict
+# `to_container` returns. tests/test_compoconf.py pins that handoff; the
+# library itself does not depend on it.
+compoconf = ["compoconf>=0.1.16"]
+
+[project.urls]
+Homepage = "https://github.com/kpoeppel/hydra_fast"
+Issues = "https://github.com/kpoeppel/hydra_fast/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hydra_fast*"]
+
+[tool.setuptools.package-data]
+hydra_fast = ["py.typed", "conf/**/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "error::DeprecationWarning:hydra_fast.*",
+]
+
+[tool.ruff]
+line-length = 95
+target-version = "py310"
+src = ["src", "tests", "bench"]
+
+[tool.ruff.lint]
+# "UP" (pyupgrade) is deliberately not selected: typing.Dict/Optional spellings
+# are kept so the annotations read the same on the 3.10 floor as on 3.13, and
+# the ported hydra modules keep upstream's style.
+select = ["E", "F", "W", "I", "B", "C4", "SIM"]
+ignore = [
+  "E501",   # long lines are the formatter's business
+  "B008",   # function call in a default is used deliberately for sentinels
+  "SIM108", # ternaries are not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The ported hydra algorithm keeps its original shape so it stays diffable
+# against upstream; reformatting it would defeat that.
+"src/hydra_fast/_internal/defaults_list.py" = ["ALL"]
+"src/hydra_fast/_internal/default_element.py" = ["ALL"]
+# Tests read an attribute purely to assert that it raises.
+"tests/*" = ["B018"]
+# The reference-tree path has to be resolved before the skip marker is built.
+"tests/test_real_world.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/hydra_fast"]
+ignore_missing_imports = true

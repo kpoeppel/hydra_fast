@@ -1,0 +1,67 @@
+name: Release
+
+# Publishes to PyPI when a version tag is pushed. Nothing fires on a normal
+# push or pull request.
+#
+# BEFORE THE FIRST RELEASE: configure a PyPI *trusted publisher* for this
+# repository and the `pypi` environment
+# (https://docs.pypi.org/trusted-publishers/). That is what the `id-token`
+# permission below is for -- no API token or secret is stored anywhere. Until
+# that is set up, the `publish` job will fail at the last step while the build
+# and verification steps still work; use `workflow_dispatch` to rehearse it.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Do not publish something that was never tested. This duplicates CI
+    # deliberately: a tag can point at a commit CI never ran on.
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+
+      - name: Check the tag matches the packaged version
+        # A tag that disagrees with pyproject.toml publishes a surprise.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          packaged=$(python -c 'import sys; sys.path.insert(0, "src"); from hydra_fast.version import __version__; print(__version__)')
+          echo "tag=$tagged packaged=$packaged"
+          test "$tagged" = "$packaged" || {
+            echo "::error::tag $GITHUB_REF_NAME does not match version $packaged"
+            exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # trusted publishing; no stored secret
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Release reuses this whole workflow, so a tag cannot be published without
+  # the full verification having run on exactly that commit.
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nothing here needs to write to the repository.
+permissions:
+  contents: read
+
+env:
+  # hydra-fast is a reimplementation, so almost every test compares against the
+  # real packages. Absence of a reference must fail rather than skip: a green
+  # run with the differential checks skipped would mean very little.
+  HYDRA_FAST_REQUIRE_UPSTREAM: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.6.9
+      - run: ruff check src/ tests/ bench/
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor and the ceiling of the supported range, plus everything
+        # between: the grammar and typing code is sensitive to typing-module
+        # changes across these versions.
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install hydra-fast and the reference packages
+        # Pinned to exactly the versions bench/_sources.py declares, so the
+        # differential results are reproducible and match the counts quoted in
+        # the README. The `test` extra's range is deliberately wider for users.
+        run: |
+          pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
+          echo "pinning $pins"
+          python -m pip install -e ".[test,attrs,compoconf]" $pins
+
+      - name: Fetch the upstream source trees
+        # The differential checks run upstream's *own* test suites and grammar
+        # corpus, which ship in the sdists but not the wheels.
+        run: python .github/scripts/fetch_upstream.py
+
+      - name: Confirm the reference packages match the pins
+        # `requires_hydra` / `requires_omegaconf` skip silently if these are
+        # absent or shadowed, so assert it here instead of trusting the skip.
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "bench")
+          import _sources
+          import hydra, omegaconf, pytest
+          assert hydra.__version__ == _sources.HYDRA_VERSION, hydra.__version__
+          assert omegaconf.__version__ == _sources.OMEGACONF_VERSION, omegaconf.__version__
+          print(f"hydra {hydra.__version__}, omegaconf {omegaconf.__version__}, "
+                f"pytest {pytest.__version__}")
+          PY
+
+      - name: Run the test suite
+        run: pytest -q --durations=10
+
+      - name: Report what skipped
+        # A skip here is not a failure, but it should be visible rather than
+        # buried in a dot.
+        if: always()
+        run: pytest -q -rs --no-header | tail -40
+
+  oracles:
+    # The standalone differential harnesses. They overlap the suite but print
+    # per-case counts, which is what the README and docs quote.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with the reference packages pinned
+        run: |
+          pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
+          echo "pinning $pins"
+          python -m pip install -e ".[test,attrs,compoconf]" $pins
+      - run: python .github/scripts/fetch_upstream.py
+      - name: Syntax-error messages vs real ANTLR
+        run: python bench/oracle_errors.py
+      - name: omegaconf grammar corpus
+        run: python bench/oracle_grammar_corpus.py
+      - name: Structured-config typing oracle
+        run: python bench/oracle_typing.py
+      - name: Override parsing
+        run: python bench/check_overrides.py
+      - name: Interpolation
+        run: python bench/check_grammar.py
+      - name: Composition
+        run: python bench/check_compose.py
+
+  package:
+    # Builds the wheel and exercises it from a clean environment, which is the
+    # only way to catch a missing package-data entry or an undeclared import.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+
+      - name: Install the wheel alone and compose a config
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+          # PyYAML is the only runtime dependency; anything else is a bug.
+          installed=$(/tmp/clean/bin/pip list --format=freeze \
+            | grep -viE '^(pip|setuptools|wheel)=' | sort)
+          echo "$installed"
+          expected=$(printf 'PyYAML==%s\nhydra-fast==%s\n' \
+            "$(/tmp/clean/bin/python -c 'import yaml; print(yaml.__version__)')" \
+            "$(/tmp/clean/bin/python -c 'import hydra_fast; print(hydra_fast.__version__)')" | sort)
+          test "$installed" = "$expected" || {
+            echo "::error::unexpected runtime dependencies"; exit 1; }
+          cd /tmp && /tmp/clean/bin/python - <<'PY'
+          import os, tempfile
+          from hydra_fast import OmegaConf, compose, initialize_config_dir
+          d = tempfile.mkdtemp(); os.makedirs(f"{d}/db")
+          open(f"{d}/config.yaml", "w").write(
+              "defaults:\n  - db: pg\n  - _self_\nurl: ${db.host}:${db.port}\n")
+          open(f"{d}/db/pg.yaml", "w").write("# @package db\nhost: localhost\nport: 5432\n")
+          with initialize_config_dir(version_base=None, config_dir=d):
+              cfg = compose(config_name="config", overrides=["++db.port=6543"])
+              # Exercises the builtin hydra/* config tree, which ships as
+              # package data. `job_logging.version` is read straight out of
+              # conf/hydra/job_logging/default.yaml, so this fails loudly if
+              # those YAMLs are missing from the distribution.
+              with_hydra = compose(config_name="config", return_hydra_config=True)
+          got = OmegaConf.to_container(cfg, resolve=True)
+          assert got["url"] == "localhost:6543", got
+          assert with_hydra.hydra.job_logging.version == 1, "builtin hydra configs missing"
+          assert "env" in with_hydra.hydra, "builtin hydra configs missing"
+          print("wheel smoke test OK:", got)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
