@@ -21,6 +21,7 @@ from hydra_fast import OmegaConf
 from hydra_fast.errors import (
     ConfigAttributeError,
     ConfigKeyError,
+    ConfigTypeError,
     MissingMandatoryValue,
     ReadonlyConfigError,
     ValidationError,
@@ -205,3 +206,141 @@ def test_empty_package_is_viable_only_where_something_may_follow():
     # `:` can follow a package nowhere
     with pytest.raises(OverrideParseException):
         parser.parse_rule(":", "package")
+
+
+# ---------------------------------------------------------------------------
+# Flag-violation messages across the mutating container API.
+#
+# `_hf_check_writable` has a generic fallback message, and most call sites
+# were taking it: omegaconf names the *operation* ("Cannot pop from read-only
+# node", "Cannot sort a read-only ListConfig"), where hydra-fast said
+# "Cannot change read-only config container" for all of them. Fourteen
+# operations differed. This table is the audit that found them, kept so they
+# cannot drift back.
+# ---------------------------------------------------------------------------
+DICT_FLAG_OPS = [
+    ("setitem-existing", lambda c: c.__setitem__("a", 2)),
+    ("setitem-new", lambda c: c.__setitem__("zz", 2)),
+    ("setattr-existing", lambda c: setattr(c, "a", 2)),
+    ("setattr-new", lambda c: setattr(c, "zz", 2)),
+    ("delitem", lambda c: c.__delitem__("a")),
+    ("delattr", lambda c: delattr(c, "a")),
+    ("pop", lambda c: c.pop("a")),
+    ("popitem", lambda c: c.popitem()),
+    ("setdefault-existing", lambda c: c.setdefault("a", 9)),
+    ("setdefault-new", lambda c: c.setdefault("zz", 9)),
+    ("update", lambda c: c.update({"a": 3})),
+    ("clear", lambda c: c.clear()),
+]
+
+LIST_FLAG_OPS = [
+    ("setitem", lambda c: c.__setitem__(0, 9)),
+    ("delitem", lambda c: c.__delitem__(0)),
+    ("append", lambda c: c.append(9)),
+    ("extend", lambda c: c.extend([9])),
+    ("insert", lambda c: c.insert(0, 9)),
+    ("pop", lambda c: c.pop()),
+    ("remove", lambda c: c.remove(1)),
+    ("clear", lambda c: c.clear()),
+    ("sort", lambda c: c.sort()),
+    ("reverse", lambda c: c.reverse()),
+    ("iadd", lambda c: c.__iadd__([9])),
+]
+
+
+def _flag_outcome(api, data, flag, operation):
+    """``(exception name, first message line)``, or ``("ok", "")``."""
+    cfg = api.create(data() if callable(data) else data)
+    if flag == "readonly":
+        api.set_readonly(cfg, True)
+    elif flag == "struct":
+        api.set_struct(cfg, True)
+    try:
+        operation(cfg)
+    except Exception as exc:  # noqa: BLE001 -- the error IS the result here
+        return (type(exc).__name__, str(exc).splitlines()[0] if str(exc) else "")
+    return ("ok", "")
+
+
+_FLAG_CASES = [
+    pytest.param("dict", flag, label, op, id=f"dict-{flag}-{label}")
+    for flag in ("readonly", "struct")
+    for label, op in DICT_FLAG_OPS
+] + [
+    pytest.param("list", flag, label, op, id=f"list-{flag}-{label}")
+    for flag in ("readonly", "struct")
+    for label, op in LIST_FLAG_OPS
+]
+
+
+@requires_omegaconf
+@pytest.mark.parametrize("kind,flag,label,operation", _FLAG_CASES)
+def test_flag_violation_matches_omegaconf(kind, flag, label, operation):
+    import omegaconf
+
+    data = (lambda: {"a": 1, "b": 2}) if kind == "dict" else (lambda: [1, 2])
+    assert _flag_outcome(OmegaConf, data, flag, operation) == _flag_outcome(
+        omegaconf.OmegaConf, data, flag, operation
+    )
+
+
+def test_readonly_messages_name_the_operation():
+    """The oracle's answers, pinned so this runs without omegaconf."""
+    expected = {
+        ("dict", "delitem"): "DictConfig in read-only mode does not support deletion",
+        ("dict", "pop"): "Cannot pop from read-only node",
+        ("dict", "clear"): "DictConfig in read-only mode does not support deletion",
+        ("list", "remove"): "Cannot delete item from read-only ListConfig",
+        ("list", "clear"): "Cannot delete item from read-only ListConfig",
+        ("list", "sort"): "Cannot sort a read-only ListConfig",
+        ("list", "reverse"): "ListConfig is read-only",
+    }
+    ops = dict(DICT_FLAG_OPS), dict(LIST_FLAG_OPS)
+    for (kind, label), message in expected.items():
+        data = (lambda: {"a": 1, "b": 2}) if kind == "dict" else (lambda: [1, 2])
+        operation = ops[0 if kind == "dict" else 1][label]
+        name, got = _flag_outcome(OmegaConf, data, "readonly", operation)
+        assert name == "ReadonlyConfigError", (kind, label, name)
+        assert got == message, (kind, label, got)
+
+
+def test_struct_deletion_messages_omit_the_key():
+    """omegaconf names the operation only -- no `of key 'a'` suffix."""
+    for operation, message in (
+        (lambda c: c.__delitem__("a"), "DictConfig in struct mode does not support deletion"),
+        (lambda c: c.popitem(), "DictConfig in struct mode does not support deletion"),
+        (lambda c: c.clear(), "DictConfig in struct mode does not support deletion"),
+        (lambda c: c.pop("a"), "DictConfig in struct mode does not support pop"),
+    ):
+        name, got = _flag_outcome(OmegaConf, lambda: {"a": 1, "b": 2}, "struct", operation)
+        assert (name, got) == ("ConfigTypeError", message)
+
+
+def test_delattr_is_exempt_from_struct_as_it_is_upstream():
+    """An inconsistency in omegaconf, matched rather than corrected.
+
+    `del cfg["a"]` raises on a struct config; `delattr(cfg, "a")` succeeds,
+    because omegaconf's `__delattr__` does not route through the struct check.
+    Code relying on that would otherwise break here. Readonly still applies.
+    """
+    cfg = OmegaConf.create({"a": 1, "b": 2})
+    OmegaConf.set_struct(cfg, True)
+    delattr(cfg, "a")
+    assert OmegaConf.to_container(cfg) == {"b": 2}
+
+    with pytest.raises(ConfigTypeError):
+        del cfg["b"]
+
+    readonly = OmegaConf.create({"a": 1})
+    OmegaConf.set_readonly(readonly, True)
+    with pytest.raises(ReadonlyConfigError):
+        delattr(readonly, "a")
+
+
+def test_clear_is_blocked_by_struct():
+    """It used to succeed, which let struct mode be bypassed wholesale."""
+    cfg = OmegaConf.create({"a": 1})
+    OmegaConf.set_struct(cfg, True)
+    with pytest.raises(ConfigTypeError):
+        cfg.clear()
+    assert OmegaConf.to_container(cfg) == {"a": 1}

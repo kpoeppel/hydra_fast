@@ -116,6 +116,8 @@ jobs:
         run: python bench/check_grammar.py
       - name: Composition
         run: python bench/check_compose.py
+      - name: Flag-violation errors
+        run: python bench/oracle_flag_errors.py
 
   package:
     # Builds the wheel and exercises it from a clean environment, which is the

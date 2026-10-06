@@ -823,26 +823,36 @@ class DictConfig(Container):
         plain = _coerce_assigned(value)
         data[key] = self._hf_coerce(self._hf_path + (key,), plain)
 
-    def __delitem__(self, key: Any) -> None:
-        self._hf_check_writable(key)
-        if self._get_flag("struct"):
-            raise ConfigTypeError(
-                f"DictConfig in struct mode does not support deletion of key '{key}'"
-            )
+    #: omegaconf's messages for these name the operation, not the key.
+    _HF_READONLY_DELETE = "DictConfig in read-only mode does not support deletion"
+    _HF_STRUCT_DELETE = "DictConfig in struct mode does not support deletion"
+
+    def _hf_delete(self, key: Any, check_struct: bool) -> None:
+        """Delete ``key``, with the flag checks omegaconf applies."""
+        self._hf_check_writable(key, self._HF_READONLY_DELETE)
+        if check_struct and self._get_flag("struct"):
+            raise ConfigTypeError(self._HF_STRUCT_DELETE)
         try:
             del self._hf_container()[key]
         except KeyError:
             raise ConfigKeyError(f"Key '{key}' does not exist") from None
 
+    def __delitem__(self, key: Any) -> None:
+        self._hf_delete(key, check_struct=True)
+
     def __delattr__(self, name: str) -> None:
-        self.__delitem__(name)
+        # Struct mode is *not* enforced here, which is an inconsistency in
+        # omegaconf rather than a choice: `del cfg["a"]` raises on a struct
+        # config and `delattr(cfg, "a")` succeeds, because its `__delattr__`
+        # does not route through the struct check. Matched because code
+        # relying on it would otherwise break on hydra-fast; readonly still
+        # applies, as it does upstream.
+        self._hf_delete(name, check_struct=False)
 
     def pop(self, key: Any, default: Any = _ABSENT) -> Any:
-        self._hf_check_writable(key)
+        self._hf_check_writable(key, "Cannot pop from read-only node")
         if self._get_flag("struct"):
-            raise ConfigTypeError(
-                f"DictConfig in struct mode does not support pop of key '{key}'"
-            )
+            raise ConfigTypeError("DictConfig in struct mode does not support pop")
         data = self._hf_container()
         if key not in data:
             if default is not _ABSENT:
@@ -905,7 +915,11 @@ class DictConfig(Container):
             self._hf_set(key, value, attribute=False)
 
     def clear(self) -> None:
-        self._hf_check_writable()
+        # Emptying a struct config is a deletion, and upstream rejects it.
+        # This used to succeed, which let struct mode be bypassed wholesale.
+        self._hf_check_writable(None, self._HF_READONLY_DELETE)
+        if self._get_flag("struct"):
+            raise ConfigTypeError(self._HF_STRUCT_DELETE)
         self._hf_container().clear()
 
     # -- iteration -------------------------------------------------------
@@ -1047,7 +1061,7 @@ class ListConfig(Container):
         return value
 
     def remove(self, item: Any) -> None:
-        self._hf_check_writable()
+        self._hf_check_writable(None, "Cannot delete item from read-only ListConfig")
         data = self._hf_container()
         for index, value in enumerate(data):
             if value == item or self._hf_get(self._hf_path + (index,), value) == item:
@@ -1065,15 +1079,15 @@ class ListConfig(Container):
         return sum(1 for value in self if value == item)
 
     def clear(self) -> None:
-        self._hf_check_writable()
+        self._hf_check_writable(None, "Cannot delete item from read-only ListConfig")
         self._hf_container().clear()
 
     def sort(self, key: Any = None, reverse: bool = False) -> None:
-        self._hf_check_writable()
+        self._hf_check_writable(None, "Cannot sort a read-only ListConfig")
         self._hf_container().sort(key=key, reverse=reverse)
 
     def reverse(self) -> None:
-        self._hf_check_writable()
+        self._hf_check_writable(None, "ListConfig is read-only")
         self._hf_container().reverse()
 
     def __iadd__(self, other: Any) -> "ListConfig":
