@@ -1,0 +1,6 @@
+# @package runner
+kind: cluster
+workers: 16
+queue_depth: ${.workers}
+partition: short
+walltime_minutes: 30

@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - base
+  - override /runner: local/process
+
+name: staged
+# Deliberately left for a per-point override to supply, the way a sweep does.
+shard: ???
+batch: 32

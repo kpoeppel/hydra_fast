@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - base
+  # `override` is required to change a group an earlier default already set.
+  - override /runner: local/thread
+  - override /storage: local
+
+name: smoke
+batch: 1

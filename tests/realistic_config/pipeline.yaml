@@ -1,0 +1,15 @@
+# The entry config. `_self_` sits last so values here win over the groups.
+defaults:
+  - runner: local/thread
+  - storage: local
+  - schedule: once
+  - notify: none
+  - _self_
+
+name: pipeline
+revision: "0.1"
+# A relative reference: resolved against this node, not the root.
+label: ${name}-${revision}
+# Environment with a default, the single most common real-world interpolation.
+workspace: ${oc.env:PIPELINE_WORKSPACE,/var/tmp/pipeline}
+outputs: ${workspace}/${label}

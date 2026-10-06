@@ -1,0 +1,6 @@
+# @package storage
+kind: local
+# Reaches up out of this package to the root -- the pattern that makes a
+# group option depend on where it was composed into.
+root: ${outputs}/data
+compression: none

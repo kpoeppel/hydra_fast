@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - base
+  - override /runner: cluster/large
+  - override /storage: object
+  - override /schedule: nightly
+  - override /notify: webhook
+
+name: production
+batch: 512
+# A target, so the tree exercises instantiate as well as composition.
+sink:
+  _target_: realistic_targets.Sink
+  root: ${storage.root}
+  compression: ${storage.compression}

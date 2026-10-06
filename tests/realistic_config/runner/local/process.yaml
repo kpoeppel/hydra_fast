@@ -1,0 +1,5 @@
+# @package runner
+kind: process
+workers: 8
+queue_depth: ${.workers}
+spawn_method: forkserver

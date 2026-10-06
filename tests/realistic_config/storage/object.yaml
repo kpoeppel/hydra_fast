@@ -1,0 +1,5 @@
+# @package storage
+kind: object
+bucket: ${oc.env:PIPELINE_BUCKET,pipeline-dev}
+root: s3://${.bucket}/${label}
+compression: zstd

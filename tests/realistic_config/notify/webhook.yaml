@@ -1,0 +1,4 @@
+# @package notify
+enabled: true
+url: ${oc.env:PIPELINE_WEBHOOK,https://example.invalid/hook}
+on_failure_only: true

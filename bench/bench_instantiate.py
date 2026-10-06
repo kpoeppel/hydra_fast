@@ -34,7 +34,7 @@ GROUPS, OPTIONS = 6, 4
 def build_tree(with_target: bool) -> str:
     """A tree of the usual shape, optionally with a `_target_` in every node."""
     root = tempfile.mkdtemp(prefix="hf-inst-")
-    target = '_target_: instantiate_targets.Plain\n' if with_target else ""
+    target = "_target_: instantiate_targets.Plain\n" if with_target else ""
     body = "\n".join(f"a{index}: {index}" for index in range(200))
     with open(os.path.join(root, "config.yaml"), "w") as handle:
         handle.write(
@@ -112,7 +112,9 @@ def main() -> int:
         f"Using it costs {(rows[2][2] - 1) * 100:+.1f}%, proportional to the objects built "
         "rather than to the sweep."
     )
-    print(f"\n(median of 3 rounds, best-of-5 each: {[round(statistics.median(samples[l]), 3) for l, _ in measure]})")
+    print(
+        f"\n(median of 3 rounds, best-of-5 each: {[round(statistics.median(samples[l]), 3) for l, _ in measure]})"
+    )
     return 0
 
 

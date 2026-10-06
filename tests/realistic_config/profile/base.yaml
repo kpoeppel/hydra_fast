@@ -1,0 +1,10 @@
+# @package _global_
+# A profile reshapes the whole config rather than one group, which is what
+# `_global_` is for. `override` is required because pipeline.yaml already
+# selects this group -- selecting it twice without it is an error, in hydra
+# and here alike.
+defaults:
+  - override /schedule: once
+
+index: 0
+stage: ""

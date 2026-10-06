@@ -1,0 +1,5 @@
+# @package runner
+kind: thread
+workers: 4
+# Relative to this node -- `${.workers}` is runner.workers.
+queue_depth: ${.workers}

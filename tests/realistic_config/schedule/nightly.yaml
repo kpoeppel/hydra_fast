@@ -1,0 +1,5 @@
+# @package schedule
+kind: cron
+expression: "0 2 * * *"
+retries: 2
+backoff_seconds: ${multiply:${.retries},30}
