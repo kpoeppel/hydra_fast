@@ -24,7 +24,7 @@ Usage mirrors hydra::
 """
 
 from ._cache import clear_all as clear_caches
-from ._cache import set_validation
+from ._cache import get_validation, set_validation
 from ._cache import stats as cache_stats
 from .container import MISSING, Container, DictConfig, ListConfig, Node
 from .errors import (
@@ -118,6 +118,7 @@ __all__ = [
     "clear_caches",
     "cache_stats",
     "set_validation",
+    "get_validation",
     # interpolation introspection
     "analyze_interpolation",
     "Analysis",

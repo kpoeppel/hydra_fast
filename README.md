@@ -120,10 +120,10 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-754 passed, 3 skipped
+770 passed, 3 skipped
 ```
 
-757 tests. What skips depends on what is installed: three need
+773 tests. What skips depends on what is installed: three need
 compoconf 0.3.1+, twelve need the private `oellm-autoexp` tree, and the
 upstream-suite tests need the source checkouts fetched (see *Running the
 differential tests*). Set `HYDRA_FAST_REQUIRE_UPSTREAM=1` to turn the last
@@ -238,12 +238,23 @@ import hydra_fast
 hydra_fast.set_validation("never")  # trust the first read; fastest
 hydra_fast.clear_caches()           # drop everything
 hydra_fast.cache_stats()            # hit/miss counters per layer
+hydra_fast.get_validation()         # "stat" or "never"
 ```
 
 `"stat"` is the default: every cache lookup re-`stat()`s the files it depends
 on, so editing a config on disk mid-process invalidates exactly the entries
-that depend on it. `"never"` skips that and trusts the first read for the life
-of the process.
+that depend on it. No explicit reload call is needed.
+
+That covers more than edits. A file *added* to a group, a file *removed* from
+one, a whole new group directory, and a changed `defaults:` list are all
+picked up, because existence is cached against the parent directory's mtime --
+which changes exactly when an entry is added or removed. `tests/test_cache.py`
+pins each case.
+
+`"never"` skips all of that and trusts the first read for the life of the
+process, so a config edited afterwards is *not* seen; `clear_caches()` is the
+only way to pick it up. `get_validation()` reports the current mode, which
+matters if something else set it.
 
 On the benchmarks above `"never"` is **not** measurably faster — the
 validation is already amortized down to a few `stat()` calls per composition.

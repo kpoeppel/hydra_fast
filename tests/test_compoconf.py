@@ -327,3 +327,45 @@ def test_strict_types_rejects_what_hydra_quotes(tmp_path):
     assert parse_config(Counted, dict(data)).steps == 10  # coerced
     with pytest.raises(Exception, match="(?i)expected int"):
         parse_config(Counted, dict(data), strict_types=True)
+
+
+# ---------------------------------------------------------------------------
+# Typing only ever sees *resolved* values, and resolution preserves the type
+# of a whole-value interpolation. So an interpolation into a typed int field
+# stays an int, and only a literal quoted scalar arrives as a string -- which
+# is the single case `strict_types=True` turns into an error.
+# ---------------------------------------------------------------------------
+RESOLUTION_CASES = [
+    ("plain", "steps: 10\n", 10, int),
+    ("interpolation", "steps: ${base}\n", 10, int),
+    ("interpolation-quoted", "steps: '${base}'\n", 10, int),
+    ("interpolation-concat", "steps: v${base}\n", "v10", str),
+    ("literal-quoted", "steps: '10'\n", "10", str),
+]
+
+
+@pytest.mark.parametrize(
+    "label,body,expected,expected_type",
+    RESOLUTION_CASES,
+    ids=[c[0] for c in RESOLUTION_CASES],
+)
+def test_resolution_preserves_type_for_whole_value_interpolations(
+    tmp_path, label, body, expected, expected_type
+):
+    (tmp_path / "config.yaml").write_text("base: 10\n" + body)
+    data = _composed_dict("hydra-fast", str(tmp_path), [])
+    assert data["steps"] == expected
+    assert type(data["steps"]) is expected_type
+
+
+@requires_hydra
+@pytest.mark.parametrize(
+    "label,body,expected,expected_type",
+    RESOLUTION_CASES,
+    ids=[c[0] for c in RESOLUTION_CASES],
+)
+def test_resolution_types_match_real_hydra(tmp_path, label, body, expected, expected_type):
+    (tmp_path / "config.yaml").write_text("base: 10\n" + body)
+    want = _composed_dict("hydra", str(tmp_path), [])["steps"]
+    got = _composed_dict("hydra-fast", str(tmp_path), [])["steps"]
+    assert (got, type(got)) == (want, type(want))

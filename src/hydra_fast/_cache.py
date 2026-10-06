@@ -124,6 +124,7 @@ def set_validation(mode: str) -> None:
 
 
 def get_validation() -> str:
+    """The current validation mode, for saving and restoring it."""
     return _VALIDATION
 
 

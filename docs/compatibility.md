@@ -24,7 +24,7 @@ What that rests on:
 | omegaconf's `test_oc_select.py`, run verbatim | **11/11** |
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
-| hydra-fast's own suite | **757 tests**; what skips depends on what is installed (see README) |
+| hydra-fast's own suite | **773 tests**; what skips depends on what is installed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
@@ -210,6 +210,24 @@ are common, so `strict_types=True` (compoconf 0.3.1+) and a Hydra override
 layer pull in opposite directions. Coercion is what makes a composed config
 land in a typed field at all -- which is why hydra-fast's own
 structured-config layer coerces too.
+
+**Interpolations are not affected**, which narrows the problem considerably.
+Typing only ever sees *resolved* values, and resolution preserves the type of
+a whole-value interpolation -- so only literal strings reach a typed field as
+strings:
+
+| written | resolves to | type | `strict_types` |
+| --- | --- | --- | --- |
+| `steps: 10` | `10` | `int` | ok |
+| `steps: ${base}` | `10` | `int` | ok |
+| `steps: '${base}'` | `10` | `int` | ok |
+| `steps: v${base}` | `'v10'` | `str` | rejected (uncoercible anyway) |
+| `steps: '10'` | `'10'` | `str` | **rejected** |
+
+Identical on real hydra for all five, and pinned in
+`tests/test_compoconf.py`. The quotes in `'${base}'` are YAML's, not part of
+the value, so it is still an interpolation and still resolves to an `int`.
+Only the last row is a genuine trap.
 
 ### Error messages
 

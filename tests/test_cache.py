@@ -6,6 +6,8 @@ import textwrap
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
 import hydra_fast
 from hydra_fast import _cache
 
@@ -203,3 +205,123 @@ def test_clear_all_empties_everything(tmp_path):
     assert _cache.stats()["load_yaml_size"] > 0
     hydra_fast.clear_caches()
     assert _cache.stats()["load_yaml_size"] == 0
+
+
+# ---------------------------------------------------------------------------
+# What the default `stat` validation actually notices.
+#
+# Editing a file is the easy case and is covered in test_compose.py. Adding
+# and removing files is the interesting one: existence is cached against the
+# *parent directory's* mtime (one stat per directory per composition instead
+# of ~12,000 per-file stats), which is only correct because a directory's
+# mtime changes exactly when an entry is added or removed from it. These pin
+# that reasoning.
+# ---------------------------------------------------------------------------
+_DETECT_TREE = {
+    "config.yaml": "defaults:\n  - db: pg\n  - _self_\nname: base\n",
+    "db/pg.yaml": "# @package db\nhost: pg-host\n",
+    "db/mysql.yaml": "# @package db\nhost: my-host\n",
+}
+
+
+def _detect_tree(root):
+    for name, body in _DETECT_TREE.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+    return root
+
+
+def _detect_compose(root, overrides=()):
+    """The composed container, or the exception name if it failed."""
+    from hydra_fast import OmegaConf, compose, initialize_config_dir
+
+    with initialize_config_dir(version_base=None, config_dir=str(root)):
+        try:
+            cfg = compose(config_name="config", overrides=list(overrides))
+        except Exception as exc:  # noqa: BLE001 -- "it stopped existing" is a result
+            return type(exc).__name__
+    return OmegaConf.to_container(cfg, resolve=True)
+
+
+def test_adding_an_option_to_a_group_is_noticed(tmp_path):
+    root = _detect_tree(tmp_path / "add")
+    assert _detect_compose(root, ["db=extra"]) == "MissingConfigException"
+
+    (root / "db" / "extra.yaml").write_text("# @package db\nhost: extra-host\n")
+    assert _detect_compose(root, ["db=extra"])["db"]["host"] == "extra-host"
+
+
+def test_removing_an_option_from_a_group_is_noticed(tmp_path):
+    root = _detect_tree(tmp_path / "remove")
+    assert _detect_compose(root, ["db=mysql"])["db"]["host"] == "my-host"
+
+    (root / "db" / "mysql.yaml").unlink()
+    assert _detect_compose(root, ["db=mysql"]) == "MissingConfigException"
+
+
+def test_adding_a_whole_group_directory_is_noticed(tmp_path):
+    """A new *directory* changes what an override means, not just its value.
+
+    `+extra=one` with no `extra/` group adds a plain key holding the string
+    "one" -- that is hydra's behaviour too, checked against it. Once the
+    directory exists the same override selects a group instead, so this pins
+    that a directory appearing mid-process is noticed, which is the case the
+    directory-mtime caching could plausibly miss.
+    """
+    root = _detect_tree(tmp_path / "newgroup")
+    assert _detect_compose(root, ["+extra=one"])["extra"] == "one"
+
+    (root / "extra").mkdir()
+    (root / "extra" / "one.yaml").write_text("# @package extra\nv: 1\n")
+    assert _detect_compose(root, ["+extra=one"])["extra"] == {"v": 1}
+
+
+def test_changing_a_defaults_list_is_noticed(tmp_path):
+    root = _detect_tree(tmp_path / "defaults")
+    assert _detect_compose(root)["db"]["host"] == "pg-host"
+
+    (root / "config.yaml").write_text("defaults:\n  - db: mysql\n  - _self_\nname: base\n")
+    assert _detect_compose(root)["db"]["host"] == "my-host"
+
+
+def test_validation_never_goes_stale_and_clear_caches_recovers(tmp_path):
+    """The documented trade: `never` trusts the first read for the process.
+
+    `clear_caches()` is the escape hatch, which is the only way to pick up a
+    change in that mode.
+    """
+    import hydra_fast
+
+    root = _detect_tree(tmp_path / "never")
+    before = _cache.get_validation()
+    try:
+        _cache.clear_all()
+        hydra_fast.set_validation("never")
+        assert _detect_compose(root)["db"]["host"] == "pg-host"
+
+        (root / "db" / "pg.yaml").write_text("# @package db\nhost: EDITED\n")
+        assert _detect_compose(root)["db"]["host"] == "pg-host", "`never` must not re-read"
+
+        hydra_fast.clear_caches()
+        assert _detect_compose(root)["db"]["host"] == "EDITED"
+    finally:
+        hydra_fast.set_validation(before)
+        _cache.clear_all()
+
+
+def test_validation_mode_round_trips_and_rejects_typos():
+    """A typo must not silently disable change detection."""
+    import hydra_fast
+
+    before = hydra_fast.get_validation()
+    try:
+        hydra_fast.set_validation("never")
+        assert hydra_fast.get_validation() == "never"
+        hydra_fast.set_validation("stat")
+        assert hydra_fast.get_validation() == "stat"
+        with pytest.raises(ValueError, match="unknown validation mode"):
+            hydra_fast.set_validation("statt")
+        assert hydra_fast.get_validation() == "stat"
+    finally:
+        hydra_fast.set_validation(before)
