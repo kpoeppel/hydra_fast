@@ -3,12 +3,21 @@
 # default profile objects to.
 extends: default
 
-# Hydra's builtin config group, copied verbatim (see ATTRIBUTION/). Editing it
-# to satisfy a linter would break the property that makes it auditable against
-# upstream -- the same reason the two ported Python modules are exempt from
-# ruff.
+# Two exemptions, both because the files have to look like what they stand in
+# for rather than what a YAML linter prefers:
+#
+# src/hydra_fast/conf/ is Hydra's builtin config group, copied verbatim (see
+# ATTRIBUTION/) -- editing it would break the property that makes it auditable
+# against upstream, the same reason the two ported Python modules are exempt
+# from ruff.
+#
+# tests/realistic_config/ is a fixture standing in for a real hydra config
+# tree. Hydra configs do not carry `---` document starts: zero of the 236
+# files in the production tree this one is modelled on have one, so requiring
+# it would make the fixture unrepresentative of the thing it exists to test.
 ignore: |
   src/hydra_fast/conf/
+  tests/realistic_config/
 
 rules:
   line-length:

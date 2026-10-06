@@ -112,9 +112,8 @@ def main() -> int:
         f"Using it costs {(rows[2][2] - 1) * 100:+.1f}%, proportional to the objects built "
         "rather than to the sweep."
     )
-    print(
-        f"\n(median of 3 rounds, best-of-5 each: {[round(statistics.median(samples[l]), 3) for l, _ in measure]})"
-    )
+    medians = [round(statistics.median(samples[label]), 3) for label, _ in measure]
+    print(f"\n(median of 3 rounds, best-of-5 each: {medians})")
     return 0
 
 
