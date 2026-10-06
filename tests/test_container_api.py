@@ -25,6 +25,7 @@ from hydra_fast.errors import (
     ConfigAttributeError,
     ConfigIndexError,
     ConfigKeyError,
+    ConfigTypeError,
     MissingMandatoryValue,
     ReadonlyConfigError,
     ValidationError,
@@ -729,3 +730,147 @@ def test_duplicate_resolver_needs_replace():
     with pytest.raises(ValueError):
         OmegaConf.register_new_resolver("hf.dup", lambda: 2)
     OmegaConf.register_new_resolver("hf.dup", lambda: 2, replace=True)
+
+
+# ---------------------------------------------------------------------------
+# Registering an ABC promises its whole interface, but supplies none of it.
+#
+# Inheriting MutableMapping/MutableSequence -- which is what omegaconf does --
+# brings the mixin methods along for free. Registering asserts they are
+# already there, so a missing one turns `isinstance(x, MutableSequence)` from
+# a silent False into a confident True followed by an AttributeError. On
+# DictConfig it is worse than that: `__getattr__` treats the missing method as
+# a config key, so `cfg.popitem()` used to report "Key 'popitem' is not in
+# struct" rather than anything about the method.
+# ---------------------------------------------------------------------------
+def _abc_surface(abc):
+    """Every name the ABC guarantees a caller: abstract methods plus mixins.
+
+    Only callables, and only public or dunder ones -- ``vars(abc)`` also holds
+    ABC bookkeeping (``__abstractmethods__``) and name-mangled privates
+    (``_MutableMapping__marker``) that are not part of the interface.
+    """
+    names = set(abc.__abstractmethods__)
+    for name, member in vars(abc).items():
+        if not callable(member):
+            continue
+        if name.startswith("_abc_") or name.startswith(f"_{abc.__name__}__"):
+            continue
+        if (name.startswith("__") and name.endswith("__")) or not name.startswith("_"):
+            names.add(name)
+    return names
+
+
+@pytest.mark.parametrize(
+    "abc_name,factory",
+    [
+        ("MutableMapping", lambda: OmegaConf.create({"a": 1})),
+        ("MutableSequence", lambda: OmegaConf.create([1, 2])),
+    ],
+)
+def test_registered_abc_interface_is_actually_present(abc_name, factory):
+    """The registration must not promise a method that is missing."""
+    import collections.abc
+
+    abc = getattr(collections.abc, abc_name)
+    container = factory()
+    missing = sorted(name for name in _abc_surface(abc) if not hasattr(container, name))
+    assert not missing, (
+        f"{type(container).__name__} is registered as {abc_name} but is missing "
+        f"{missing}; registering an ABC does not supply its mixins"
+    )
+
+
+def test_popitem_takes_the_first_pair_not_the_last():
+    """`dict.popitem` is LIFO; the MutableMapping mixin omegaconf inherits
+    pops `next(iter(self))`, so this follows the mixin."""
+    cfg = OmegaConf.create({"a": 1, "b": 2, "c": 3})
+    assert cfg.popitem() == ("a", 1)
+    assert OmegaConf.to_container(cfg) == {"b": 2, "c": 3}
+
+
+def test_popitem_returns_a_detached_container():
+    cfg = OmegaConf.create({"a": {"n": 1}, "b": 2})
+    key, value = cfg.popitem()
+    assert key == "a"
+    assert OmegaConf.to_container(value) == {"n": 1}
+    assert OmegaConf.to_container(cfg) == {"b": 2}
+
+
+def test_popitem_on_empty_raises_keyerror():
+    with pytest.raises(KeyError):
+        OmegaConf.create({}).popitem()
+
+
+def test_popitem_respects_flags():
+    readonly = OmegaConf.create({"a": 1})
+    OmegaConf.set_readonly(readonly, True)
+    with pytest.raises(ReadonlyConfigError):
+        readonly.popitem()
+
+    struct = OmegaConf.create({"a": 1})
+    OmegaConf.set_struct(struct, True)
+    with pytest.raises(ConfigTypeError):
+        struct.popitem()
+
+
+def test_mapping_is_not_reversible():
+    """`Mapping` sets `__reversed__ = None` so the legacy sequence protocol
+    cannot kick in and walk integer keys."""
+    with pytest.raises(TypeError, match="not reversible"):
+        reversed(OmegaConf.create({"a": 1}))
+
+
+def test_list_reverse_in_place():
+    cfg = OmegaConf.create([1, 2, 3])
+    assert cfg.reverse() is None
+    assert OmegaConf.to_container(cfg) == [3, 2, 1]
+
+    nested = OmegaConf.create([{"a": 1}, {"b": 2}])
+    nested.reverse()
+    assert OmegaConf.to_container(nested) == [{"b": 2}, {"a": 1}]
+
+
+def test_list_reverse_respects_readonly():
+    cfg = OmegaConf.create([1, 2])
+    OmegaConf.set_readonly(cfg, True)
+    with pytest.raises(ReadonlyConfigError):
+        cfg.reverse()
+
+
+ABC_MIXIN_CASES = [
+    ("reversed_dict", lambda api: list(reversed(api.create({"a": 1, "b": 2})))),
+    ("popitem", lambda api: api.create({"a": 1, "b": 2, "c": 3}).popitem()),
+    ("popitem_empty", lambda api: api.create({}).popitem()),
+    ("reverse", lambda api: (lambda c: (c.reverse(), api.to_container(c))[1])(api.create([1, 2, 3]))),
+    ("reversed_list", lambda api: list(reversed(api.create([1, 2, 3])))),
+    # `+=` on a *held* view: the promise is in-place mutation, so the parent
+    # must see it. Rebinding via __add__ passes a naive `c += x; print(c)`
+    # check while leaving the parent stale.
+    (
+        "iadd_writes_through",
+        lambda api: (
+            lambda cfg: (cfg.l.__iadd__([3]), api.to_container(cfg))[1]
+        )(api.create({"l": [1, 2]})),
+    ),
+    (
+        "iadd_held_view",
+        lambda api: (
+            lambda cfg, view: (view.__iadd__([3]), api.to_container(cfg))[1]
+        )(*(lambda c: (c, c.l))(api.create({"l": [1, 2]}))),
+    ),
+]
+
+
+@requires_omegaconf
+@pytest.mark.parametrize("label,operation", ABC_MIXIN_CASES, ids=[c[0] for c in ABC_MIXIN_CASES])
+def test_abc_mixin_behaviour_matches_omegaconf(label, operation):
+    import omegaconf
+
+    def outcome(api):
+        try:
+            return ("ok", operation(api))
+        except Exception as exc:  # noqa: BLE001 -- the error IS the result here
+            return ("raise", type(exc).__name__)
+
+    assert outcome(OmegaConf) == outcome(omegaconf.OmegaConf)

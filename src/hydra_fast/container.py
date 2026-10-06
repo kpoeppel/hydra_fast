@@ -857,6 +857,35 @@ class DictConfig(Container):
         del data[key]
         return value
 
+    def popitem(self) -> Tuple[Any, Any]:
+        """Remove and return the **first** ``(key, value)`` pair.
+
+        First, not last: omegaconf inherits ``MutableMapping``, whose mixin
+        does ``next(iter(self))``, where the builtin ``dict.popitem`` is LIFO.
+        Deletion goes through ``__delitem__`` so the flag checks and their
+        messages are the ones omegaconf's mixin would have triggered -- it
+        reports struct and readonly violations as *deletions*, not as pops.
+        """
+        data = self._hf_container()
+        try:
+            key = next(iter(data))
+        except StopIteration:
+            # omegaconf's mixin lets the mixin's own KeyError out, unadorned,
+            # before any flag is consulted.
+            raise KeyError() from None
+        value = self._hf_get(self._hf_path + (key,), data[key])
+        if isinstance(value, Container):
+            value = value._hf_clone(deep=True)
+        del self[key]
+        return key, value
+
+    #: ``reversed()`` on a mapping is a TypeError, not a walk of integer keys.
+    #: ``Mapping`` sets this to None for exactly that reason; registering the
+    #: ABC rather than inheriting it does not bring it along, and without it
+    #: Python falls back to the old ``__getitem__``/``__len__`` sequence
+    #: protocol and reports a baffling missing-key error for ``0``.
+    __reversed__ = None  # type: ignore[assignment]
+
     def setdefault(self, key: Any, default: Any = None) -> Any:
         data = self._hf_container()
         if key in data:
@@ -1042,6 +1071,23 @@ class ListConfig(Container):
     def sort(self, key: Any = None, reverse: bool = False) -> None:
         self._hf_check_writable()
         self._hf_container().sort(key=key, reverse=reverse)
+
+    def reverse(self) -> None:
+        self._hf_check_writable()
+        self._hf_container().reverse()
+
+    def __iadd__(self, other: Any) -> "ListConfig":
+        """``+=`` extends in place and returns the same view.
+
+        Without this, ``+=`` falls back to ``__add__`` and rebinds the name to
+        a new object, so a *held* view stops writing through:
+        ``view = cfg.l; view += [3]`` left ``cfg.l`` untouched, while omegaconf
+        -- which gets this from ``MutableSequence`` -- mutates the parent.
+        ``cfg.l += [3]`` happened to work either way, because the attribute
+        assignment put the result back.
+        """
+        self.extend(other)
+        return self
 
     def _get_node(self, index: Any, validate_access: bool = True) -> Any:
         data = self._hf_container()

@@ -120,7 +120,7 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-687 passed
+704 passed
 ```
 
 - **Upstream suites run against hydra-fast** (`tests/test_upstream.py`):
