@@ -120,8 +120,14 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-754 passed
+754 passed, 3 skipped
 ```
+
+757 tests. What skips depends on what is installed: three need
+compoconf 0.3.1+, twelve need the private `oellm-autoexp` tree, and the
+upstream-suite tests need the source checkouts fetched (see *Running the
+differential tests*). Set `HYDRA_FAST_REQUIRE_UPSTREAM=1` to turn the last
+group's skips into errors, as CI does.
 
 - **Upstream suites run against hydra-fast** (`tests/test_upstream.py`):
   hydra's own `test_overrides_parser.py` — **508 cases, fully green**;

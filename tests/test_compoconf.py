@@ -18,6 +18,11 @@ compoconf is not a dependency of hydra-fast; this skips without it.
 from __future__ import annotations
 
 import dataclasses
+import datetime
+import decimal
+import enum
+import pathlib
+import uuid
 from typing import Dict, List, Literal, Optional
 
 import pytest
@@ -123,8 +128,8 @@ def config_dir(tmp_path):
     return str(tmp_path)
 
 
-def _pipeline(engine: str, config_dir: str, overrides: List[str]):
-    """Compose with ``engine``, then hand the plain dict to compoconf."""
+def _composed_dict(engine: str, config_dir: str, overrides: List[str]):
+    """The handoff itself: compose with ``engine``, resolve to a plain dict."""
     if engine == "hydra-fast":
         from hydra_fast import OmegaConf, compose, initialize_config_dir
     else:
@@ -133,7 +138,16 @@ def _pipeline(engine: str, config_dir: str, overrides: List[str]):
 
     with initialize_config_dir(version_base=None, config_dir=config_dir):
         cfg = compose(config_name="config", overrides=overrides)
-    return parse_config(RootConfig, OmegaConf.to_container(cfg, resolve=True))
+    return OmegaConf.to_container(cfg, resolve=True)
+
+
+def _pipeline_with(engine: str, config_dir: str, overrides: List[str], config_class):
+    """Compose with ``engine``, then hand the plain dict to compoconf."""
+    return parse_config(config_class, _composed_dict(engine, config_dir, overrides))
+
+
+def _pipeline(engine: str, config_dir: str, overrides: List[str]):
+    return _pipeline_with(engine, config_dir, overrides, RootConfig)
 
 
 OVERRIDE_CASES = [
@@ -233,3 +247,83 @@ def test_the_handoff_dict_is_identical(config_dir):
 
     assert got == expected
     assert type_map(got) == type_map(expected)
+
+
+# ---------------------------------------------------------------------------
+# compoconf 0.3.1 added Enum/Path/datetime/Decimal/UUID fields. Those arrive
+# across the boundary as the strings YAML produces, so the composed dict has
+# to carry them unchanged for the far side to parse them.
+# ---------------------------------------------------------------------------
+_HAS_STDLIB_SCALARS = hasattr(compoconf, "parse_file")  # landed together in 0.3.x
+
+requires_compoconf_scalars = pytest.mark.skipif(
+    not _HAS_STDLIB_SCALARS, reason="needs compoconf 0.3.1+ (stdlib scalar support)"
+)
+
+
+class Mode(enum.Enum):
+    FAST = "fast"
+    SLOW = "slow"
+
+
+@dataclasses.dataclass
+class Scalars(ConfigInterface):
+    mode: Mode = Mode.SLOW
+    where: pathlib.Path = pathlib.Path(".")
+    when: datetime.datetime = datetime.datetime(2020, 1, 1)
+    amount: decimal.Decimal = decimal.Decimal("0")
+    ident: Optional[uuid.UUID] = None
+
+
+SCALARS_YAML = (
+    "mode: fast\n"
+    "where: /tmp/out\n"
+    "when: '2024-03-01T12:30:00'\n"
+    "amount: '1.25'\n"
+    "ident: '12345678-1234-5678-1234-567812345678'\n"
+)
+
+
+@pytest.fixture
+def scalars_dir(tmp_path):
+    (tmp_path / "config.yaml").write_text(SCALARS_YAML)
+    return str(tmp_path)
+
+
+@requires_compoconf_scalars
+def test_stdlib_scalars_survive_the_boundary(scalars_dir):
+    parsed = _pipeline_with("hydra-fast", scalars_dir, [], Scalars)
+    assert parsed.mode is Mode.FAST
+    assert parsed.where == pathlib.Path("/tmp/out")
+    assert parsed.when == datetime.datetime(2024, 3, 1, 12, 30)
+    assert parsed.amount == decimal.Decimal("1.25")
+    assert parsed.ident == uuid.UUID("12345678-1234-5678-1234-567812345678")
+
+
+@requires_compoconf_scalars
+@requires_hydra
+def test_stdlib_scalars_match_real_hydra(scalars_dir):
+    expected = _pipeline_with("hydra", scalars_dir, [], Scalars)
+    got = _pipeline_with("hydra-fast", scalars_dir, [], Scalars)
+    assert asdict(got) == asdict(expected)
+
+
+@requires_compoconf_scalars
+def test_strict_types_rejects_what_hydra_quotes(tmp_path):
+    """Not a hydra-fast quirk -- real Hydra produces the same string.
+
+    Quoting is how Hydra's grammar forces a string, so a strict pass and a
+    Hydra override layer pull in opposite directions. Pinned because the
+    answer is counter-intuitive and documented in docs/compatibility.md.
+    """
+    (tmp_path / "config.yaml").write_text("steps: '10'\n")
+
+    @dataclasses.dataclass
+    class Counted(ConfigInterface):
+        steps: int = 1
+
+    data = _composed_dict("hydra-fast", str(tmp_path), [])
+    assert data["steps"] == "10", "a quoted scalar must stay a string"
+    assert parse_config(Counted, dict(data)).steps == 10  # coerced
+    with pytest.raises(Exception, match="(?i)expected int"):
+        parse_config(Counted, dict(data), strict_types=True)

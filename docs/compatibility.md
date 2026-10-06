@@ -24,7 +24,7 @@ What that rests on:
 | omegaconf's `test_oc_select.py`, run verbatim | **11/11** |
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
-| hydra-fast's own suite | **754 pass** (742 without the private `oellm-autoexp` tree) |
+| hydra-fast's own suite | **757 tests**; what skips depends on what is installed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
@@ -191,7 +191,25 @@ worth knowing:
 `tests/test_compoconf.py` pins the contract -- the composed dict must match
 hydra's in both values *and* types, since a typing layer dispatches on
 `isinstance` and would behave differently given a `ListConfig` where hydra
-produced a `list`.
+produced a `list`. It passes against compoconf 0.1.16 and 0.3.1, including
+0.3.1's `Enum`/`Path`/`datetime`/`Decimal`/`UUID` fields, which arrive across
+the boundary as the strings YAML gives and are parsed on the far side.
+
+One interaction is worth knowing, and it is not specific to hydra-fast --
+real Hydra behaves identically. A strict typing pass rejects values Hydra's
+own syntax deliberately produces as strings:
+
+```python
+# config.yaml holds `steps: '10'`, or the override is ++steps='10'
+parse_config(Cfg, data)                     # -> steps=10, coerced
+parse_config(Cfg, data, strict_types=True)  # -> ValueError: Expected int, got str
+```
+
+Quoting is how Hydra's grammar *forces* a string, and quoted scalars in YAML
+are common, so `strict_types=True` (compoconf 0.3.1+) and a Hydra override
+layer pull in opposite directions. Coercion is what makes a composed config
+land in a typed field at all -- which is why hydra-fast's own
+structured-config layer coerces too.
 
 ### Error messages
 

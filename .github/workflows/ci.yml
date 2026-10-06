@@ -52,13 +52,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install hydra-fast and the reference packages
-        # Pinned to exactly the versions bench/_sources.py declares, so the
-        # differential results are reproducible and match the counts quoted in
-        # the README. The `test` extra's range is deliberately wider for users.
+        # hydra and omegaconf are pinned to exactly the versions
+        # bench/_sources.py declares, so the differential results are
+        # reproducible; the `test` extra's range is deliberately wider for
+        # users. compoconf is taken at its newest so the version-gated
+        # boundary tests actually run rather than skipping.
+        #
+        # The integration is supported from compoconf 0.1.16 (the extra's
+        # floor) and verified against it; CI covers the newest because that is
+        # where a break would appear first.
         run: |
           pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
           echo "pinning $pins"
           python -m pip install -e ".[test,attrs,compoconf]" $pins
+          python -m pip install --upgrade compoconf
 
       - name: Fetch the upstream source trees
         # The differential checks run upstream's *own* test suites and grammar
@@ -103,6 +110,7 @@ jobs:
           pins=$(python -c 'import sys; sys.path.insert(0, "bench"); import _sources as s; print(f"hydra-core=={s.HYDRA_VERSION} omegaconf=={s.OMEGACONF_VERSION}")')
           echo "pinning $pins"
           python -m pip install -e ".[test,attrs,compoconf]" $pins
+          python -m pip install --upgrade compoconf
       - run: python .github/scripts/fetch_upstream.py
       - name: Syntax-error messages vs real ANTLR
         run: python bench/oracle_errors.py
