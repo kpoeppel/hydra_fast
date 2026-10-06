@@ -11,7 +11,7 @@ Each case composes the same tree with both implementations and compares the
 resolved container, or the (exception type, first message line) pair.
 
     pip install hydra-core==1.3.2
-    python bench/oracle_defaults_list.py [--show-diffs]
+    python bench/oracle_defaults_list.py
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import warnings
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -59,9 +59,7 @@ TREE: Dict[str, str] = {
     "override_nested.yaml": (
         "defaults:\n  - composite: pulls_a_one\n  - override a: two\n  - _self_\n"
     ),
-    "override_twice.yaml": (
-        "defaults:\n  - a: one\n  - override a: two\n  - _self_\n"
-    ),
+    "override_twice.yaml": ("defaults:\n  - a: one\n  - override a: two\n  - _self_\n"),
     # deletion
     "delete_target.yaml": "defaults:\n  - a: one\n  - b: one\n  - _self_\n",
     # optional
@@ -73,9 +71,7 @@ TREE: Dict[str, str] = {
     # package rebinding at the selection site
     "rebind_named.yaml": "defaults:\n  - a@renamed: one\n  - _self_\n",
     "rebind_global.yaml": "defaults:\n  - a@_global_: one\n  - _self_\n",
-    "rebind_two_ways.yaml": (
-        "defaults:\n  - a@first: one\n  - a@second: two\n  - _self_\n"
-    ),
+    "rebind_two_ways.yaml": ("defaults:\n  - a@first: one\n  - a@second: two\n  - _self_\n"),
     # An interpolated group name references an *earlier group choice* -- `a`
     # takes whatever option `b` took. It cannot reach a value in the primary
     # config's own body: that fails in hydra too, which the second root pins.
@@ -189,9 +185,7 @@ def outcome(engine: str, root: str, name: str, overrides: List[str]) -> Tuple[An
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--show-diffs", action="store_true")
-    args = ap.parse_args()
+    argparse.ArgumentParser(description=__doc__).parse_args()
 
     try:
         import hydra  # noqa: F401

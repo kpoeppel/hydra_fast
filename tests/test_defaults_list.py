@@ -36,6 +36,7 @@ def test_matches_hydra(tree, name, overrides):
 # The answers that matter, pinned so these still run without hydra.
 # ---------------------------------------------------------------------------
 
+
 def _composed(tree, name, overrides=()):
     """The resolved container, asserting composition succeeded."""
     result = oracle.outcome("hydra-fast", tree, name, list(overrides))
@@ -48,6 +49,7 @@ def _failure(tree, name, overrides=()):
     result = oracle.outcome("hydra-fast", tree, name, list(overrides))
     assert result[0] == "raise", result
     return result[1], result[2]
+
 
 def test_self_last_lets_the_root_win(tree):
     assert _composed(tree, "self_last")["shared"] == "root-wins"
