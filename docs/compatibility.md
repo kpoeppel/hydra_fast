@@ -23,8 +23,10 @@ What that rests on:
 | omegaconf's `test_readonly.py` + `test_struct.py`, run verbatim | **38/38** |
 | omegaconf's `test_oc_select.py`, run verbatim | **11/11** |
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
+| Defaults List audit: 40 cases over `_self_` placement, `override` at depth, deletions, `optional`, package rebinding, interpolated group names | **40/40** (results, errors *and* warnings) |
+| `instantiate` / `_target_` oracle | **34/34** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
-| hydra-fast's own suite | **856 tests**; what skips depends on what is installed (see README) |
+| hydra-fast's own suite | **915 tests**; what skips depends on what is installed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.

@@ -12,10 +12,13 @@
 from __future__ import annotations  # PEP 604 annotations on py3.9
 
 import copy
+import os
+import warnings
 from dataclasses import dataclass, field
 from textwrap import dedent
-from typing import Callable
+from typing import Any, Callable
 
+from ..container import DictConfig
 from ..omegaconf_api import OmegaConf
 
 from ..errors import MissingConfigException
@@ -173,20 +176,6 @@ class Overrides:
     def ensure_overrides_used(self) -> None:
         for key, meta in self.override_metadata.items():
             if not meta.used:
-                if not meta.external_override:
-                    # A Defaults List override must target a Group Default that
-                    # precedes it in the effective depth-first Defaults List.
-                    # Later entries, such as command line appends, are not
-                    # eligible targets and are not suggested as candidates.
-                    value = self.override_choices[key]
-                    msg = (
-                        f"Invalid Defaults List override '{meta.relative_key}: {value}'."
-                        f"\nNo earlier Group Default for '{key}' exists to override."
-                    )
-                    if meta.containing_config_path is not None:
-                        msg = f"In '{meta.containing_config_path}': {msg}"
-                    raise ConfigCompositionException(msg)
-
                 group = key.split("@")[0]
                 choices = (
                     self.known_choices_per_group[group]
@@ -292,9 +281,21 @@ class DefaultsList:
     overrides: Overrides
 
 
+def _has_config_content(cfg: Any) -> bool:
+    """True if a config carries anything besides its ``defaults:`` list."""
+    if cfg._is_none() or cfg._is_missing():
+        return False
+
+    for key in cfg.keys():
+        if not OmegaConf.is_missing(cfg, key) and key != "defaults":
+            return True
+    return False
+
+
 def _validate_self(
     containing_node: InputDefault,
     defaults: list[InputDefault],
+    has_config_content: bool,
 ) -> bool:
     # check that self is present only once
     has_self = False
@@ -310,6 +311,19 @@ def _validate_self(
             has_self = True
 
     if not has_self and has_non_override or len(defaults) == 0:
+        # NOTE: kept from upstream. A primary config with both content and a
+        # defaults list, but no `_self_`, has an ambiguous composition order --
+        # hydra 1.1 made it explicit and still warns. Dropping the warning
+        # would silently lose that signal for anyone migrating a 1.0-era tree.
+        if containing_node.primary and has_config_content and has_non_override:
+            msg = (
+                f"In '{containing_node.get_config_path()}': Defaults list is missing `_self_`. "
+                f"See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/"
+                f"default_composition_order for more information"
+            )
+            if os.environ.get("SELF_WARNING_AS_ERROR") == "1":
+                raise ConfigCompositionException(msg)
+            warnings.warn(msg, UserWarning)
         defaults.append(ConfigDefault(path="_self_"))
 
     return not has_self
@@ -678,7 +692,14 @@ def _create_defaults_tree_impl(
         or is_root_config
         and len(overrides.append_group_defaults) > 0
     ):
-        _validate_self(containing_node=parent, defaults=defaults_list)
+        has_config_content = isinstance(loaded.config, DictConfig) and _has_config_content(
+            loaded.config
+        )
+        _validate_self(
+            containing_node=parent,
+            defaults=defaults_list,
+            has_config_content=has_config_content,
+        )
 
     if is_root_config:
         defaults_list.extend(overrides.append_group_defaults)
