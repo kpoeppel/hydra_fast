@@ -101,3 +101,44 @@ def test_git_ignores_the_reference_checkouts_only_at_the_root():
         "src/hydra_fast/conf/hydra/ is gitignored; the reference-checkout "
         "patterns need a leading slash to stay anchored to the repo root"
     )
+
+
+# ---------------------------------------------------------------------------
+# the version is declared twice, so the two must agree
+# ---------------------------------------------------------------------------
+def _pyproject_version() -> str:
+    """The version in `[project]`, read without importing hydra_fast.
+
+    `tomllib` is 3.11+, and the supported floor is 3.10, so fall back to a
+    narrow scan of the `[project]` table rather than taking a dependency.
+    """
+    text = (ROOT / "pyproject.toml").read_text()
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        in_project = False
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("["):
+                in_project = stripped == "[project]"
+            elif in_project and stripped.startswith("version"):
+                return stripped.split("=", 1)[1].strip().strip("\"'")
+        raise AssertionError("no version found in [project]") from None
+    return tomllib.loads(text)["project"]["version"]
+
+
+def test_declared_versions_agree():
+    """`pyproject.toml` feeds the wheel metadata; `version.py` feeds users.
+
+    Nothing links them, so they can drift -- and a drifted release ships
+    metadata saying one thing while `hydra_fast.__version__` says another.
+    The release workflow checks the tag against the *packaged* version, so
+    this is the check that catches the other half.
+    """
+    import hydra_fast
+
+    assert hydra_fast.__version__ == _pyproject_version(), (
+        "version mismatch: pyproject.toml says "
+        f"{_pyproject_version()!r}, hydra_fast.__version__ is "
+        f"{hydra_fast.__version__!r} -- bump both"
+    )

@@ -55,13 +55,27 @@ jobs:
 
       - name: Verify the tag matches the packaged version
         # Skipped on workflow_dispatch, where there is no tag to compare.
+        #
+        # Reads the built wheel's own metadata rather than importing
+        # hydra_fast: this job installs only the build tooling, so importing
+        # the package would need its runtime dependency present -- and that is
+        # beside the point, since what matters is the version in the artifact
+        # about to be uploaded, not one re-derived from source.
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          packaged=$(python -c 'import sys; sys.path.insert(0, "src"); from hydra_fast.version import __version__; print(__version__)')
+          packaged=$(python - <<'PY'
+          import email.parser, glob, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(wheel) as archive:
+              name = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+              meta = email.parser.Parser().parsestr(archive.read(name).decode())
+          print(meta["Version"])
+          PY
+          )
           tagged="${GITHUB_REF_NAME#v}"
           echo "tag=$GITHUB_REF_NAME packaged=$packaged"
           if [ "$tagged" != "$packaged" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match version $packaged in pyproject.toml"
+            echo "::error::tag $GITHUB_REF_NAME does not match packaged version $packaged"
             exit 1
           fi
 
