@@ -842,28 +842,33 @@ ABC_MIXIN_CASES = [
     ("reversed_dict", lambda api: list(reversed(api.create({"a": 1, "b": 2})))),
     ("popitem", lambda api: api.create({"a": 1, "b": 2, "c": 3}).popitem()),
     ("popitem_empty", lambda api: api.create({}).popitem()),
-    ("reverse", lambda api: (lambda c: (c.reverse(), api.to_container(c))[1])(api.create([1, 2, 3]))),
+    (
+        "reverse",
+        lambda api: (lambda c: (c.reverse(), api.to_container(c))[1])(api.create([1, 2, 3])),
+    ),
     ("reversed_list", lambda api: list(reversed(api.create([1, 2, 3])))),
     # `+=` on a *held* view: the promise is in-place mutation, so the parent
     # must see it. Rebinding via __add__ passes a naive `c += x; print(c)`
     # check while leaving the parent stale.
     (
         "iadd_writes_through",
-        lambda api: (
-            lambda cfg: (cfg.l.__iadd__([3]), api.to_container(cfg))[1]
-        )(api.create({"l": [1, 2]})),
+        lambda api: (lambda cfg: (cfg.l.__iadd__([3]), api.to_container(cfg))[1])(
+            api.create({"l": [1, 2]})
+        ),
     ),
     (
         "iadd_held_view",
-        lambda api: (
-            lambda cfg, view: (view.__iadd__([3]), api.to_container(cfg))[1]
-        )(*(lambda c: (c, c.l))(api.create({"l": [1, 2]}))),
+        lambda api: (lambda cfg, view: (view.__iadd__([3]), api.to_container(cfg))[1])(
+            *(lambda c: (c, c.l))(api.create({"l": [1, 2]}))
+        ),
     ),
 ]
 
 
 @requires_omegaconf
-@pytest.mark.parametrize("label,operation", ABC_MIXIN_CASES, ids=[c[0] for c in ABC_MIXIN_CASES])
+@pytest.mark.parametrize(
+    "label,operation", ABC_MIXIN_CASES, ids=[c[0] for c in ABC_MIXIN_CASES]
+)
 def test_abc_mixin_behaviour_matches_omegaconf(label, operation):
     import omegaconf
 

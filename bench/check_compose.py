@@ -280,7 +280,10 @@ def run_fast(config_dir: Path, config_name: str, overrides: List[str]) -> Any:
 def normalize(value: Any) -> Any:
     """Make results comparable: NaN-safe, tuple/list-agnostic."""
     if isinstance(value, dict):
-        return {key: normalize(item) for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))}
+        return {
+            key: normalize(item)
+            for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))
+        }
     if isinstance(value, (list, tuple)):
         return [normalize(item) for item in value]
     if isinstance(value, float) and value != value:

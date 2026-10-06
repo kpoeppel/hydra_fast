@@ -104,9 +104,7 @@ class Functions:
             )
         signature = self.definitions[func.name]
 
-        args = [
-            arg.text if isinstance(arg, QuotedString) else arg for arg in func.args
-        ]
+        args = [arg.text if isinstance(arg, QuotedString) else arg for arg in func.args]
         kwargs = {
             key: value.text if isinstance(value, QuotedString) else value
             for key, value in func.kwargs.items()

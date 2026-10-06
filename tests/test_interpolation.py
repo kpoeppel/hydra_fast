@@ -112,7 +112,9 @@ def _read(module, data, key):
     return value
 
 
-@pytest.mark.parametrize("data,key", CASES, ids=[f"{d.get(k.split('.')[0], k)!r:.40s}" for d, k in CASES])
+@pytest.mark.parametrize(
+    "data,key", CASES, ids=[f"{d.get(k.split('.')[0], k)!r:.40s}" for d, k in CASES]
+)
 def test_matches_omegaconf(data, key):
     import hydra_fast
 
@@ -129,9 +131,9 @@ def test_matches_omegaconf(data, key):
         got, got_error = None, type(exc).__name__
 
     if expected_error or got_error:
-        assert expected_error and got_error, (
-            f"omegaconf={expected_error or expected!r} fast={got_error or got!r}"
-        )
+        assert (
+            expected_error and got_error
+        ), f"omegaconf={expected_error or expected!r} fast={got_error or got!r}"
         return
     # repr comparison so NaN compares equal to itself
     assert expected == got or repr(expected) == repr(got), f"{expected!r} != {got!r}"
@@ -240,7 +242,5 @@ def test_oc_dict_values_falls_back_for_unspellable_keys():
 
 def test_referenced_subtree_resolves_in_its_own_context():
     """`${a}` pointing at a subtree with `${.sibling}` refs resolves correctly."""
-    cfg = OmegaConf.create(
-        {"a": {"x": 1, "y": "${.x}"}, "alias": "${a}"}
-    )
+    cfg = OmegaConf.create({"a": {"x": 1, "y": "${.x}"}, "alias": "${a}"})
     assert OmegaConf.to_container(cfg, resolve=True)["alias"] == {"x": 1, "y": 1}

@@ -69,9 +69,7 @@ assert restored.__version__ == real_version, (restored.__version__, real_version
 assert restored is real
 print("OK")
 """
-    proc = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True
-    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     if "ModuleNotFoundError" in proc.stderr and "omegaconf" in proc.stderr:
         import pytest
 

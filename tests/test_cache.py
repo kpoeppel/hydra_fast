@@ -95,7 +95,9 @@ def test_composition_caches_survive_eviction_pressure(tmp_path):
     _cache.set_max_entries(1, "defaults")
     try:
         for index in range(10):
-            out = _compose(conf, [f"++run={index}", "db=postgres" if index % 2 else "db=mysql"])
+            out = _compose(
+                conf, [f"++run={index}", "db=postgres" if index % 2 else "db=mysql"]
+            )
             expected = "postgresql" if index % 2 else "mysql"
             assert out["db"]["driver"] == expected
             assert out["run"] == index

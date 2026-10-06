@@ -145,9 +145,7 @@ def contributing_files(defaults: Sequence[Any], repo: Any) -> Tuple:
     found = set()
     for config_path in paths:
         for source in sources:
-            full = _resolved_config_path(
-                source.path, config_path, source._normalize_file_name
-            )
+            full = _resolved_config_path(source.path, config_path, source._normalize_file_name)
             if full is None:
                 continue
             try:

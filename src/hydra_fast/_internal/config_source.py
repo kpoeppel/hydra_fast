@@ -327,9 +327,11 @@ class FileConfigSource(ConfigSource):
 
         # The cached dict is shared; composition mutates what it gets, and the
         # `defaults` key is consumed separately, so hand over a copy without it.
-        body = {key: value for key, value in data.items() if key != "defaults"} if isinstance(
-            data, dict
-        ) else data
+        body = (
+            {key: value for key, value in data.items() if key != "defaults"}
+            if isinstance(data, dict)
+            else data
+        )
         config = (
             DictConfig._hf_adopt(fast_deepcopy(body))
             if isinstance(body, dict)
@@ -507,7 +509,9 @@ class ImportlibResourcesConfigSource(ConfigSource):
             else data
         )
         config = (
-            DictConfig._hf_adopt(body) if isinstance(body, dict) else ListConfig._hf_adopt(body)
+            DictConfig._hf_adopt(body)
+            if isinstance(body, dict)
+            else ListConfig._hf_adopt(body)
         )
         return ConfigResult(
             config=config,

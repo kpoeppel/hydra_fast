@@ -51,9 +51,9 @@ GROUP_EFFECTS = {
 
 def test_builtin_hydra_configs_are_present_on_disk():
     for group in REQUIRED_GROUPS:
-        assert (CONF / "hydra" / group / "default.yaml").is_file(), (
-            f"conf/hydra/{group}/default.yaml is missing"
-        )
+        assert (
+            CONF / "hydra" / group / "default.yaml"
+        ).is_file(), f"conf/hydra/{group}/default.yaml is missing"
 
 
 @pytest.mark.parametrize("group", REQUIRED_GROUPS)
@@ -63,9 +63,9 @@ def test_builtin_hydra_configs_compose(group):
 
     with initialize_config_dir(version_base=None, config_dir=str(CONF)):
         cfg = compose(config_name=None, overrides=[], return_hydra_config=True)
-    assert GROUP_EFFECTS[group](cfg.hydra), (
-        f"conf/hydra/{group}/default.yaml did not reach the composed hydra node"
-    )
+    assert GROUP_EFFECTS[group](
+        cfg.hydra
+    ), f"conf/hydra/{group}/default.yaml did not reach the composed hydra node"
 
 
 @pytest.mark.skipif(not (ROOT / ".git").exists(), reason="not a git checkout")
@@ -78,9 +78,7 @@ def test_git_tracks_every_shipped_config():
         text=True,
         check=True,
     ).stdout.split()
-    on_disk = sorted(
-        str(path.relative_to(ROOT)) for path in CONF.rglob("*.yaml")
-    )
+    on_disk = sorted(str(path.relative_to(ROOT)) for path in CONF.rglob("*.yaml"))
     untracked = sorted(set(on_disk) - set(tracked))
     assert not untracked, (
         "these config files ship in the package but git does not track them, "

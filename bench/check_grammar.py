@@ -79,7 +79,9 @@ CASES = [
 
 
 def register(oc: object) -> None:
-    OmegaConf.register_new_resolver("hf.echo", lambda *a: list(a) if len(a) != 1 else a[0], replace=True)
+    OmegaConf.register_new_resolver(
+        "hf.echo", lambda *a: list(a) if len(a) != 1 else a[0], replace=True
+    )
 
 
 def main() -> int:

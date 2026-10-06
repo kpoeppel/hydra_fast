@@ -158,7 +158,9 @@ def _message_core(message: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--show-diffs", action="store_true", help="print every differing message")
-    ap.add_argument("--show-accepts", action="store_true", help="print accept/reject disagreements")
+    ap.add_argument(
+        "--show-accepts", action="store_true", help="print accept/reject disagreements"
+    )
     args = ap.parse_args()
 
     try:

@@ -154,7 +154,5 @@ def register_hydra_configs() -> None:
     store.store(
         group="hydra/launcher", name="basic", node=BasicLauncherConf(), provider="hydra"
     )
-    store.store(
-        group="hydra/sweeper", name="basic", node=BasicSweeperConf(), provider="hydra"
-    )
+    store.store(group="hydra/sweeper", name="basic", node=BasicSweeperConf(), provider="hydra")
     _REGISTERED = True

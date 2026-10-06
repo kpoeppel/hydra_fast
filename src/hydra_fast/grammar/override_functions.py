@@ -210,7 +210,9 @@ def _normalize_cast_value(*args: Any, value: Any = None) -> Any:
     return _list_to_simple_choice(*args)
 
 
-def apply_to_dict_values(value: Dict[Any, Any], function: Callable[..., Any]) -> Dict[Any, Any]:
+def apply_to_dict_values(
+    value: Dict[Any, Any], function: Callable[..., Any]
+) -> Dict[Any, Any]:
     return {key: function(item) for key, item in value.items()}
 
 

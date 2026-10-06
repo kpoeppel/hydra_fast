@@ -40,7 +40,9 @@ def build_tree(root: Path, keys: int, groups: int, options: int) -> Path:
         elif index % 5 == 3:
             base_lines.append(f"  key{index}: ${{oc.select:base.key{index - 1},0}}")
         else:
-            base_lines.append(f'  key{index}: "${{base.key{index - 2}}}/${{base.key{index - 1}}}"')
+            base_lines.append(
+                f'  key{index}: "${{base.key{index - 2}}}/${{base.key{index - 1}}}"'
+            )
     base_block = "\n".join(base_lines)
 
     (conf / "config.yaml").write_text(

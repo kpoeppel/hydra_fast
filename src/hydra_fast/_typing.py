@@ -160,8 +160,10 @@ def _is_union(origin: Any) -> bool:
     if origin is typing.Union:
         return True
     # types.UnionType, for `int | None` written without typing.Optional
-    return origin is not None and origin.__class__.__name__ == "UnionType" or (
-        getattr(origin, "__name__", None) == "UnionType"
+    return (
+        origin is not None
+        and origin.__class__.__name__ == "UnionType"
+        or (getattr(origin, "__name__", None) == "UnionType")
     )
 
 
@@ -239,8 +241,7 @@ def validate(value: Any, annotation: Any, key: Optional[str] = None) -> Any:
             _fail(value, _name(annotation), key)
         if len(args) == 2:
             return {
-                validate(k, args[0], key): validate(v, args[1], key)
-                for k, v in value.items()
+                validate(k, args[0], key): validate(v, args[1], key) for k, v in value.items()
             }
         return value
 

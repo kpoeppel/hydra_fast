@@ -93,9 +93,7 @@ def validate(value, annotation):
         if not isinstance(value, dict):
             raise ValueError(f"expected a dict, got {type(value).__name__}")
         if len(args) == 2:
-            return {
-                validate(k, args[0]): validate(v, args[1]) for k, v in value.items()
-            }
+            return {validate(k, args[0]): validate(v, args[1]) for k, v in value.items()}
         return value
 
     if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
@@ -105,7 +103,9 @@ def validate(value, annotation):
             try:
                 return annotation[value]
             except KeyError:
-                raise ValueError(f"'{value}' is not a member of {annotation.__name__}") from None
+                raise ValueError(
+                    f"'{value}' is not a member of {annotation.__name__}"
+                ) from None
         raise ValueError(f"cannot convert {value!r} to {annotation.__name__}")
 
     if dataclasses.is_dataclass(annotation):
@@ -153,9 +153,7 @@ def validate(value, annotation):
             try:
                 return float(value)
             except ValueError:
-                raise ValueError(
-                    f"Value '{value}' could not be converted to Float"
-                ) from None
+                raise ValueError(f"Value '{value}' could not be converted to Float") from None
         raise ValueError(f"Value '{value}' could not be converted to Float")
 
     if annotation is str:

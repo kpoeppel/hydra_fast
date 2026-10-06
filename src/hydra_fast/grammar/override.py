@@ -221,7 +221,9 @@ class Glob:
             return any(fnmatch.fnmatch(name, pattern) for pattern in globs)
 
         return [
-            name for name in names if match(name, self.include) and not match(name, self.exclude)
+            name
+            for name in names
+            if match(name, self.include) and not match(name, self.exclude)
         ]
 
 
@@ -328,7 +330,9 @@ class Override:
             return self._value
         return Override._convert_value(self._value)
 
-    def sweep_iterator(self, transformer: Callable[[Any], Any] = Transformer.identity) -> Iterator:
+    def sweep_iterator(
+        self, transformer: Callable[[Any], Any] = Transformer.identity
+    ) -> Iterator:
         """Enumerate a discrete sweep, honouring ``shuffle``."""
         import random
 
@@ -562,10 +566,7 @@ _VALUE_PATH = (
     rf"(?:{_KEY_BRACKET}|\.{_KEY_SEGMENT})*"
 )
 
-_QUOTED = (
-    r"\"(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)\""
-    r"|'(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)'"
-)
+_QUOTED = r"\"(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)\"" r"|'(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)'"
 
 _OVERRIDE_MODES: Dict[str, List[Tuple[str, int, Optional[str]]]] = {
     _KEY_MODE: [
@@ -683,7 +684,9 @@ class _TokenStream:
                 best_len = size
                 best = (match, ttype, switch)
         if best is None or best_len == 0:
-            raise OverrideParseException(text, token_recognition_error(_failed_span(text, pos)))
+            raise OverrideParseException(
+                text, token_recognition_error(_failed_span(text, pos))
+            )
         won, won_type, switch = best
         self.tokens.append(_OvToken(won_type, won.group(0)))
         self.scan = won.end()
@@ -900,7 +903,9 @@ class _OvParser:
         mismatch at ``b``. Reproducing that means doing the probe first, as
         ANTLR does, rather than treating it as a special case.
         """
-        expected = exc.expected if isinstance(exc.expected, (set, frozenset)) else {exc.expected}
+        expected = (
+            exc.expected if isinstance(exc.expected, (set, frozenset)) else {exc.expected}
+        )
         rendered = _VOCAB.render(expected, with_eof=exc.with_eof)
         offending = self._text_at(exc.index)
 
@@ -1206,13 +1211,13 @@ class _OvParser:
                     in_kwargs = True
                 else:
                     if in_kwargs:
-                        raise HydraException(
-                            "positional argument follows keyword argument"
-                        )
+                        raise HydraException("positional argument follows keyword argument")
                     args.append(self.parse_element())
                 if predicting and self.peek() not in (COMMA, PCLOSE):
                     span_from = (
-                        self._predicting_from if self._predicting_from is not None else arg_start
+                        self._predicting_from
+                        if self._predicting_from is not None
+                        else arg_start
                     )
                     raise self.fail(no_viable_alternative(self._span(span_from, self.pos)))
                 if self.peek() == COMMA:

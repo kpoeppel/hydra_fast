@@ -284,7 +284,11 @@ def _params():
     for name, (files, config_name, override_sets) in TREES.items():
         for overrides in override_sets:
             yield pytest.param(
-                name, files, config_name, overrides, id=f"{name}-{'_'.join(overrides) or 'none'}"
+                name,
+                files,
+                config_name,
+                overrides,
+                id=f"{name}-{'_'.join(overrides) or 'none'}",
             )
 
 
@@ -307,9 +311,9 @@ def test_matches_hydra(tmp_path, name, files, config_name, overrides: List[str])
         got, got_error = None, type(exc).__name__
 
     if expected_error or got_error:
-        assert expected_error and got_error, (
-            f"hydra={expected_error or 'ok'} fast={got_error or 'ok'}"
-        )
+        assert (
+            expected_error and got_error
+        ), f"hydra={expected_error or 'ok'} fast={got_error or 'ok'}"
         return
     assert expected == got
 

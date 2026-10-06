@@ -62,9 +62,7 @@ if not CASES:
 
 
 @requires_omegaconf
-@pytest.mark.skipif(
-    not CASES, reason=_sources.missing_reason("omegaconf", "OMEGACONF_SRC")
-)
+@pytest.mark.skipif(not CASES, reason=_sources.missing_reason("omegaconf", "OMEGACONF_SRC"))
 @pytest.mark.parametrize("rule,text", CASES)
 def test_grammar_corpus_matches_omegaconf(rule, text):
     import omegaconf
@@ -140,9 +138,9 @@ def test_omegaconf_suite_is_green(suite):
     if "ImportError while importing test module" in proc.stdout:
         pytest.skip(f"{suite} is not importable under this pytest")
     summary = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
-    assert "failed" not in summary and "error" not in summary, (
-        f"{suite}: {summary}\n{proc.stdout[-2500:]}"
-    )
+    assert (
+        "failed" not in summary and "error" not in summary
+    ), f"{suite}: {summary}\n{proc.stdout[-2500:]}"
     assert "passed" in summary, proc.stdout[-2000:]
 
 

@@ -115,7 +115,9 @@ TREE = {
         "pp: 4\n"
         "recompute: selective\n"
     ),
-    "backend/titan.yaml": ("# @package backend\nclass_name: TitanBackend\ndp: 8\ncompile: true\n"),
+    "backend/titan.yaml": (
+        "# @package backend\nclass_name: TitanBackend\ndp: 8\ncompile: true\n"
+    ),
 }
 
 

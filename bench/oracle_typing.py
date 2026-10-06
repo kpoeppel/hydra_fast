@@ -190,9 +190,11 @@ def describe(mod, op) -> str:
         result = mod.OmegaConf.to_container(result)
     if isinstance(result, dict):
         # only report the keys the case touched, with their types
-        return "{" + ", ".join(
-            f"{k}={v!r}:{type(v).__name__}" for k, v in sorted(result.items())
-        ) + "}"
+        return (
+            "{"
+            + ", ".join(f"{k}={v!r}:{type(v).__name__}" for k, v in sorted(result.items()))
+            + "}"
+        )
     return f"{result!r}:{type(result).__name__}"
 
 

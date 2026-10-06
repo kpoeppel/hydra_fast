@@ -302,9 +302,7 @@ class Analysis:
         placeholder.
         """
         return tuple(
-            ref.spelling
-            for ref in self.node_refs
-            if not ref.relative_dots and not ref.dynamic
+            ref.spelling for ref in self.node_refs if not ref.relative_dots and not ref.dynamic
         )
 
 
@@ -543,9 +541,7 @@ class _Parser:
             if not previous_was_comma:
                 # Elements must be separated by a comma: `'a''b'` is a parse
                 # error, not two elements.
-                raise self.error(
-                    f"expected ',' before {self.current.text!r} in sequence"
-                )
+                raise self.error(f"expected ',' before {self.current.text!r} in sequence")
             start = self.pos
             element = self.parse_element()
             spelling = "".join(token.text for token in self.tokens[start : self.pos])
@@ -672,9 +668,9 @@ class _Parser:
         known = tuple(_segments_to_parts([s for s in segments if s[0] != "inter"]))
         self.refs.append(
             NodeRef(
-                "." * dots + "".join(
-                    payload if kind != "inter" else "${...}"
-                    for kind, payload in segments
+                "." * dots
+                + "".join(
+                    payload if kind != "inter" else "${...}" for kind, payload in segments
                 ),
                 known,
                 dots,

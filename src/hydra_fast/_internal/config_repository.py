@@ -99,7 +99,9 @@ class ConfigRepository(IConfigRepository):
         options: List[str] = []
         for source in self.sources:
             if source.is_group(config_path=group_name):
-                options.extend(source.list(config_path=group_name, results_filter=results_filter))
+                options.extend(
+                    source.list(config_path=group_name, results_filter=results_filter)
+                )
         return sorted(set(options))
 
     def get_sources(self) -> List[ConfigSource]:

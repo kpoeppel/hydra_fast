@@ -104,9 +104,7 @@ def _oc_env(key: str, default: Any = _NOT_FOUND) -> Any:
     except KeyError:
         if default is not _NOT_FOUND:
             return str(default) if default is not None else None
-        raise InterpolationResolutionError(
-            f"Environment variable '{key}' not found"
-        ) from None
+        raise InterpolationResolutionError(f"Environment variable '{key}' not found") from None
 
 
 def _oc_select(key: str, default: Any = _NOT_FOUND, *, _parent_: Any = None) -> Any:
@@ -182,9 +180,7 @@ def _dict_arg(key: Any, parent: Any, who: str) -> Any:
     if node is None:
         raise ConfigKeyError(f"Key not found: '{key}'")
     if not isinstance(node, DictConfig):
-        raise TypeError(
-            f"`{who}` cannot be applied to objects of type: {type(node).__name__}"
-        )
+        raise TypeError(f"`{who}` cannot be applied to objects of type: {type(node).__name__}")
     return node
 
 
