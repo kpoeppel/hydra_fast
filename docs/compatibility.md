@@ -24,7 +24,7 @@ What that rests on:
 | omegaconf's `test_oc_select.py`, run verbatim | **11/11** |
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
-| hydra-fast's own suite | **617 pass** |
+| hydra-fast's own suite | **640 pass** |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
