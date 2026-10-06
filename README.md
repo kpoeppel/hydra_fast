@@ -17,8 +17,9 @@ with initialize_config_dir(config_dir="/path/to/conf", version_base=None):
 Same config file syntax, same `${...}` interpolation grammar, same override
 grammar, same `OmegaConf`/`compose` API. Roughly 100x faster on a sweep.
 
-It reimplements the composition and interpolation core, not job launching,
-sweeper plugins or `instantiate`. Within that scope it is validated against the
+It reimplements the composition and interpolation core — including
+`instantiate`/`_target_` — but not job launching or sweeper plugins. Within
+that scope it is validated against the
 real packages — including running **hydra's own override-grammar suite** and
 **omegaconf's own grammar corpus** against it.
 [docs/compatibility.md](https://github.com/kpoeppel/hydra_fast/blob/main/docs/compatibility.md) is explicit about the boundary.
@@ -120,10 +121,10 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-774 passed, 3 skipped
+853 passed, 3 skipped
 ```
 
-777 tests. What skips depends on what is installed: three need
+856 tests. What skips depends on what is installed: three need
 compoconf 0.3.1+, twelve need the private `oellm-autoexp` tree, and the
 upstream-suite tests need the source checkouts fetched (see *Running the
 differential tests*). Set `HYDRA_FAST_REQUIRE_UPSTREAM=1` to turn the last

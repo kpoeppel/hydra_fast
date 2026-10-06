@@ -24,7 +24,7 @@ What that rests on:
 | omegaconf's `test_oc_select.py`, run verbatim | **11/11** |
 | structured-config typing oracle (captured from omegaconf) | **70/70** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **455/459** message text |
-| hydra-fast's own suite | **777 tests**; what skips depends on what is installed (see README) |
+| hydra-fast's own suite | **856 tests**; what skips depends on what is installed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
@@ -113,6 +113,24 @@ YAML onto, with defaults, nesting and `MISSING` preserved.
 `compose`, `initialize`, `initialize_config_dir`, `initialize_config_module`,
 `main`, `ConfigStore`, the `hydra.*` config node (with
 `return_hydra_config=True`), `hydra.runtime.choices`, `hydra.overrides`.
+
+### `instantiate` / `_target_`
+
+**Implemented and differentially tested** (34/34 oracle cases, matched against
+hydra including error types). `hydra_fast.instantiate`, `call`, `get_class`,
+`get_method`, `get_object`, `get_static_method`, `ConvertMode`, and
+`hydra.utils` through the shim.
+
+All five protocol keys: `_target_`, `_args_`, `_recursive_`, `_convert_`
+(`none`/`partial`/`object`/`all`), `_partial_`. Call-site positional arguments
+*replace* `_args_` rather than extending it, and keyword arguments override
+config keys — both as hydra does.
+
+It costs nothing unless used. `instantiate` runs after composition and reads
+`_target_` as an ordinary string key, so a tree carrying one in every node
+composes at the same speed as one with none: measured at **−0.7%**, i.e.
+noise (`bench/bench_instantiate.py`). Using it is proportional to the objects
+built, not to the sweep.
 
 `version_base` is a real setting, not a swallowed argument: `hydra_fast.version`
 provides `setbase` / `getbase` / `base_at_least`, the `initialize*` entry points
@@ -329,7 +347,6 @@ are not implemented:
 - job launching and the launcher plugin API (`hydra/launcher`)
 - sweeper plugins and multirun execution (sweep overrides *parse*, but nothing
   executes them)
-- `hydra.utils.instantiate` / `_target_` instantiation
 - working-directory management, `hydra.job.chdir`, output directories
 - logging configuration (`hydra/job_logging` composes, but nothing applies it)
 - the `--help` / `--cfg` / `--info` command-line interface

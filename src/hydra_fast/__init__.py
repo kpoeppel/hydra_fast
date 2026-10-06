@@ -69,6 +69,15 @@ from .omegaconf_api import (
     open_dict,
     read_write,
 )
+from .utils import (
+    ConvertMode,
+    call,
+    get_class,
+    get_method,
+    get_object,
+    get_static_method,
+    instantiate,
+)
 from .version import __version__
 
 __all__ = [
@@ -115,6 +124,13 @@ __all__ = [
     "OverrideParseException",
     "MissingConfigException",
     # caches
+    "instantiate",
+    "call",
+    "get_class",
+    "get_method",
+    "get_object",
+    "get_static_method",
+    "ConvertMode",
     "clear_caches",
     "cache_stats",
     "set_validation",

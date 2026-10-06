@@ -40,6 +40,7 @@ _SHIMMED = (
     "hydra.errors",
     "hydra.version",
     "hydra.core",
+    "hydra.utils",
     "hydra.core.singleton",
     "hydra.core.config_store",
     "hydra.core.override_parser",
@@ -280,6 +281,22 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     version_module.__compat_version__ = _hf_version.Version(_hf_version.__compat_version__)
     hydra_module.version = version_module
 
+    # hydra.utils: instantiate and the _target_ helpers.
+    from hydra_fast import utils as _hf_utils
+
+    utils_mod = _module("hydra.utils", "hydra-fast shim standing in for hydra.utils.")
+    for _name in (
+        "instantiate",
+        "call",
+        "get_class",
+        "get_method",
+        "get_object",
+        "get_static_method",
+        "ConvertMode",
+    ):
+        setattr(utils_mod, _name, getattr(_hf_utils, _name))
+    hydra_module.utils = utils_mod
+
     # hydra.core.singleton: test fixtures save and restore singleton state, so
     # it has to be *this* Singleton -- the real one holds a different registry
     # and would restore nothing hydra-fast owns.
@@ -315,6 +332,7 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
         "hydra.errors": hydra_errors,
         "hydra.version": version_module,
         "hydra.core": hydra_core,
+        "hydra.utils": utils_mod,
         "hydra.core.singleton": singleton_module,
         "hydra.core.config_store": core_store,
         "hydra.core.override_parser": override_parser,

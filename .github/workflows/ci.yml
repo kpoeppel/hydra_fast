@@ -127,6 +127,8 @@ jobs:
         run: python bench/check_compose.py
       - name: Flag-violation errors
         run: python bench/oracle_flag_errors.py
+      - name: instantiate / _target_
+        run: python bench/oracle_instantiate.py
 
   package:
     # Builds the wheel and exercises it from a clean environment, which is the
