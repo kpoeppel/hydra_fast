@@ -27,17 +27,27 @@ What that rests on:
 | `instantiate` / `_target_` oracle | **34/34** |
 | syntax-error oracle: 62 malformed inputs x 12 grammar rules, vs real ANTLR | **744/744** accept/reject, **459/459** message text |
 | private-surface audit: node layer and `omegaconf._utils` | **174/174** node probes, **75/75** `_utils` probes |
-| hydra-fast's own suite | **915 tests**; what skips depends on what is installed (see README) |
+| hydra-fast's own suite | **1025 tests**; nothing outside the repository is needed (see README) |
 
 All of that runs in CI via `tests/test_upstream.py`, which fails if an upstream
 case regresses.
 
 One honest limit remains:
 
-**Parse trees do not exist**, so omegaconf's `test_grammar.py` -- which
-asserts against ANTLR `ParserRuleContext` objects -- cannot run. Its corpus is
-covered through the public API instead (row 2 above). The two things a tree is
-actually *used* for are both available: see
+**Parse trees do not exist**, so the part of omegaconf's `test_grammar.py`
+that *visits* a tree cannot run: `parse()` returns a compiled closure, and a
+closure has no `.accept(visitor)`. The suite does run -- 109 of its 349 cases
+pass, the ones that check accept/reject or the fast-path regex -- and its
+whole corpus is covered through the public API instead (row 2 above).
+
+This is a missing *protocol*, not a missing capability, and not the source of
+the speed. Measured on one interpolation: parsing costs 0.53 us here against
+500 us through ANTLR, and resolving costs 6.9 us against 773 us -- the first
+from not using the ANTLR runtime, the second from calling a compiled closure
+rather than re-walking anything. A tree could exist and simply not be walked
+at resolve time; building one is a parse-time cost, and parsing is amortised
+~40:1 against resolution in a sweep. The two things a tree is actually *used*
+for are already available: see
 [docs/architecture.md](architecture.md#what-replaces-the-parse-tree).
 
 The private surface used to be listed here as a second limit, vaguely

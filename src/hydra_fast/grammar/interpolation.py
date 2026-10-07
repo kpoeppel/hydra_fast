@@ -915,6 +915,45 @@ def compile_single_element(value: str) -> Compiled:
     return _finish(parser, parser.parse_single_element())
 
 
+# ---------------------------------------------------------------------------
+# A regex that recognises the *typical* interpolation shapes, transcribed from
+# omegaconf's `grammar_parser.py` (BSD 3-Clause; see ATTRIBUTION/). omegaconf
+# uses it as a fast path -- a string it matches is known to be a valid
+# interpolation without running the parser. hydra-fast does not need the fast
+# path, since its parser is already cheap and memoized, but third-party code
+# imports the pattern and omegaconf's own grammar suite asserts on it.
+#
+# It must never match something the grammar would reject: a false positive
+# here would skip validation upstream.
+# ---------------------------------------------------------------------------
+# Transcribed literally, including where upstream leaves an alternation
+# unparenthesised (`\.foo|\[foo\]` binds loosely, which is what lets
+# `${a[b]}` match) and where a `?` makes a repetition lazy rather than making
+# a group optional. Both read like slips and both are load-bearing, so the
+# construction below mirrors omegaconf's piece for piece rather than tidying
+# it. `test_internals.py` asserts the compiled pattern is character-identical.
+_SIMPLE_CONFIG_KEY = r"[$\w]+"  # foo, $0, $bar, $foo_$bar123$
+_SIMPLE_KEY_MAYBE_BRACKETS = _SIMPLE_CONFIG_KEY + r"|\[" + _SIMPLE_CONFIG_KEY + r"\]"
+_SIMPLE_NODE_ACCESS = r"\." + _SIMPLE_KEY_MAYBE_BRACKETS
+_SIMPLE_NODE_PATH = (
+    r"(\.)*(" + _SIMPLE_KEY_MAYBE_BRACKETS + r")(" + _SIMPLE_NODE_ACCESS + r")*"
+)
+_SIMPLE_NODE_INTER = r"\${\s*" + _SIMPLE_NODE_PATH + r"\s*}"
+_SIMPLE_ID = r"[a-zA-Z_][\w\-]*"
+_SIMPLE_RESOLVER_NAME = r"(" + _SIMPLE_ID + r"(\." + _SIMPLE_ID + r")*)?"
+_SIMPLE_ARG = r"[a-zA-Z_0-9/\-\+.$%*@?|]+"
+_SIMPLE_ARGS = _SIMPLE_ARG + r"(\s*,\s*" + _SIMPLE_ARG + r")*"
+_SIMPLE_RESOLVER_INTER = (
+    r"\${\s*" + _SIMPLE_RESOLVER_NAME + r"\s*:\s*" + _SIMPLE_ARGS + r"?\s*}"
+)
+_SIMPLE_INTER = r"(" + _SIMPLE_NODE_INTER + r"|" + _SIMPLE_RESOLVER_INTER + r")"
+_SIMPLE_OUTER = r"([^$]|\$(?!{))+"
+SIMPLE_INTERPOLATION_PATTERN = re.compile(
+    r"(" + _SIMPLE_OUTER + r")?(" + _SIMPLE_INTER + r"(" + _SIMPLE_OUTER + r")?)+$",
+    flags=re.ASCII,
+)
+
+
 def parse(
     value: str,
     parser_rule: str = "configValue",

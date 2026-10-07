@@ -121,10 +121,10 @@ against the real Hydra and OmegaConf:
 
 ```console
 $ pytest
-1001 passed, 3 skipped
+1022 passed, 3 skipped
 ```
 
-1004 tests, and **no test needs anything outside the repository**. The three
+1025 tests, and **no test needs anything outside the repository**. The three
 that skip above need compoconf 0.3.1+, which CI installs. The upstream-suite
 tests need the hydra and omegaconf source checkouts fetched (see *Running the
 differential tests*); `HYDRA_FAST_REQUIRE_UPSTREAM=1` turns those skips into

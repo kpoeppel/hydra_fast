@@ -129,3 +129,64 @@ def test_value_kind_classifies_the_three_states():
     assert get_value_kind("???") is ValueKind.MANDATORY_MISSING
     assert get_value_kind("${a}") is ValueKind.INTERPOLATION
     assert get_value_kind("x${a}y") is ValueKind.INTERPOLATION
+
+
+# ---------------------------------------------------------------------------
+# omegaconf's fast-path regex. It is importable from `omegaconf.grammar_parser`
+# and its own grammar suite asserts on it, so the shim provides it.
+# ---------------------------------------------------------------------------
+@requires_omegaconf
+def test_simple_interpolation_pattern_is_identical():
+    """Character-identical, not merely equivalent.
+
+    Transcribed piece for piece, including two things that read like slips in
+    upstream and are load-bearing: an unparenthesised alternation (which is
+    what lets `${a[b]}` match) and a `?` that makes a repetition lazy rather
+    than a group optional.
+    """
+    from omegaconf.grammar_parser import SIMPLE_INTERPOLATION_PATTERN as theirs
+
+    from hydra_fast.grammar.interpolation import SIMPLE_INTERPOLATION_PATTERN as mine
+
+    assert mine.pattern == theirs.pattern
+    assert mine.flags == theirs.flags
+
+
+SIMPLE_PATTERN_CASES = [
+    "${a}",
+    "${a.b}",
+    "x${a}y",
+    "${oc.env:A,b}",
+    "${a[b]}",
+    "${..a}",
+    "${}",
+    "${a",
+    "a}",
+    "$notinterp",
+    "${a:b:c}",
+    "${'q'}",
+    "${a.${b}}",
+    "plain",
+    "",
+    "${ a }",
+    "${a.b.c[d]}",
+    "${f:1,2,3}",
+    "${f:}",
+]
+
+
+@requires_omegaconf
+@pytest.mark.parametrize("text", SIMPLE_PATTERN_CASES)
+def test_simple_interpolation_pattern_matches_the_same_strings(text):
+    from omegaconf.grammar_parser import SIMPLE_INTERPOLATION_PATTERN as theirs
+
+    from hydra_fast.grammar.interpolation import SIMPLE_INTERPOLATION_PATTERN as mine
+
+    assert bool(mine.fullmatch(text)) == bool(theirs.fullmatch(text))
+
+
+def test_the_shim_exposes_the_pattern_where_upstream_does():
+    import hydra_fast.compat.omegaconf_shim as shim
+
+    grammar_parser = shim._make_omegaconf_module()[3]
+    assert hasattr(grammar_parser, "SIMPLE_INTERPOLATION_PATTERN")

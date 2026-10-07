@@ -161,6 +161,9 @@ def _make_omegaconf_module() -> "Tuple[Any, Any, Any, Any]":
 
     grammar_parser_module.parse = _hf_interp.parse
     grammar_parser_module.GrammarParseError = errors.GrammarParseError
+    grammar_parser_module.SIMPLE_INTERPOLATION_PATTERN = (
+        _hf_interp.SIMPLE_INTERPOLATION_PATTERN
+    )
     grammar_parser_module.__doc__ = (
         "Stand-in for omegaconf.grammar_parser. `parse()` returns hydra-fast's "
         "compiled closure rather than an ANTLR parse tree; it round-trips "
