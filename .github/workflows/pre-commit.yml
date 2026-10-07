@@ -2,9 +2,9 @@
 name: pre-commit
 
 # Runs every hook in .pre-commit-config.yaml: whitespace and YAML hygiene,
-# ruff (lint + format), mypy, bandit, yamllint. The hooks are the same ones a
-# contributor gets from `pre-commit install`, so this catches the case where
-# someone has not installed them.
+# ruff (lint + format), mypy, pylint, bandit, yamllint. The hooks are the same
+# ones a contributor gets from `pre-commit install`, so this catches the case
+# where someone has not installed them.
 #
 # Kept separate from ci.yml because it is fast and version-independent, and
 # because a formatting failure should be distinguishable at a glance from a
