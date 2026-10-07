@@ -11,6 +11,7 @@ way by importing both -- they share no global state.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import tempfile
@@ -286,7 +287,7 @@ def normalize(value: Any) -> Any:
         }
     if isinstance(value, (list, tuple)):
         return [normalize(item) for item in value]
-    if isinstance(value, float) and value != value:
+    if isinstance(value, float) and math.isnan(value):
         return "nan"
     return value
 
@@ -422,6 +423,7 @@ def run_in_subprocess(
             "--overrides",
             *overrides,
         ],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(Path.home()),

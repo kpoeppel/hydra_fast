@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import math
 import textwrap
 from pathlib import Path
 from typing import Any, Dict, List
@@ -260,7 +261,7 @@ def _normalize(value):
         return {k: _normalize(v) for k, v in sorted(value.items(), key=lambda kv: str(kv[0]))}
     if isinstance(value, (list, tuple)):
         return [_normalize(v) for v in value]
-    if isinstance(value, float) and value != value:
+    if isinstance(value, float) and math.isnan(value):
         return "nan"
     return value
 
@@ -565,7 +566,7 @@ def test_main_decorator_composes_from_argv(tmp_path, argv, expected):
 
     root, python = _main_app(tmp_path)
     proc = subprocess.run(
-        [python, "app.py", *argv], cwd=str(root), capture_output=True, text=True
+        [python, "app.py", *argv], check=False, cwd=str(root), capture_output=True, text=True
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
     line = next(x for x in proc.stdout.splitlines() if x.startswith("RESULT"))

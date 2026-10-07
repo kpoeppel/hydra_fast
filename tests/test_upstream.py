@@ -131,6 +131,7 @@ def test_omegaconf_suite_is_green(suite):
     _install_shim_conftest(OMEGACONF_SRC)
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", suite, "-q", "-p", "no:cacheprovider", "--no-header"],
+        check=False,
         cwd=str(OMEGACONF_SRC),
         capture_output=True,
         text=True,
@@ -171,6 +172,7 @@ def test_hydra_override_grammar_suite():
             "--no-header",
             "--continue-on-collection-errors",
         ],
+        check=False,
         cwd=str(HYDRA_SRC),
         capture_output=True,
         text=True,

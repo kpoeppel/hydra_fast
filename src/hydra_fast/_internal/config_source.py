@@ -370,10 +370,7 @@ class FileConfigSource(ConfigSource):
     def is_config(self, config_path: str) -> bool:
         from .fingerprint import path_kind
 
-        try:
-            normalized = self._normalize_file_name(config_path)
-        except ConfigLoadError:
-            raise
+        normalized = self._normalize_file_name(config_path)
         return path_kind(self._full_path(normalized)) == "file"
 
     def list(self, config_path: str, results_filter: Optional[ObjectType]) -> builtins.list:

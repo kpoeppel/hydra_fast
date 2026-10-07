@@ -91,6 +91,7 @@ def test_git_ignores_the_reference_checkouts_only_at_the_root():
     """`/hydra/` must stay anchored, or it eats the builtin config tree."""
     probe = subprocess.run(
         ["git", "check-ignore", "src/hydra_fast/conf/hydra/env/default.yaml"],
+        check=False,
         cwd=ROOT,
         capture_output=True,
         text=True,

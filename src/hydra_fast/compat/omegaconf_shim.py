@@ -277,7 +277,9 @@ def _make_hydra_modules() -> Dict[str, types.ModuleType]:
     from hydra_fast import version as _hf_version
 
     version_module = _module("hydra.version")
-    version_module.__version__ = hydra_module.__version__
+    # pylint cannot see that `_module()` returns Any and that this was
+    # assigned a few lines up; same limitation mypy had.
+    version_module.__version__ = hydra_module.__version__  # pylint: disable=no-member
     version_module.getbase = _hf_version.getbase
     version_module.setbase = _hf_version.setbase
     version_module.base_at_least = _hf_version.base_at_least

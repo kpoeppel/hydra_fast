@@ -149,9 +149,8 @@ class FloatRange:
         if self.step > 0:
             if value >= self.stop:
                 raise StopIteration
-        else:
-            if value <= self.stop:
-                raise StopIteration
+        elif value <= self.stop:
+            raise StopIteration
         self._current = value + self.step  # type: ignore[attr-defined]
         return value
 
@@ -720,7 +719,11 @@ def _tokenize_override(text: str, mode: str) -> _TokenStream:
 # ---------------------------------------------------------------------------
 # grammar functions
 # ---------------------------------------------------------------------------
-from . import override_functions as _fn  # noqa: E402
+# Imported here rather than at the top: override_functions needs the value
+# model defined above (ChoiceSweep, Glob, QuotedString...), so a top-level
+# import would be a cycle. The names it provides are only needed from this
+# point on.
+from . import override_functions as _fn  # noqa: E402  # pylint: disable=wrong-import-position
 
 _BUILTIN_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "int": _fn.cast_int,

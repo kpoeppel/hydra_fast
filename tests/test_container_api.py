@@ -838,30 +838,39 @@ def test_list_reverse_respects_readonly():
         cfg.reverse()
 
 
+def _reverse_a_list(api):
+    cfg = api.create([1, 2, 3])
+    cfg.reverse()
+    return api.to_container(cfg)
+
+
+def _iadd_through_the_parent(api):
+    cfg = api.create({"l": [1, 2]})
+    cfg.l += [3]
+    return api.to_container(cfg)
+
+
+def _iadd_through_a_held_view(api):
+    """`+=` on a view someone is holding has to write through to the parent.
+
+    Rebinding via `__add__` passes a naive `c += x; print(c)` check while
+    leaving the parent stale, which is why this goes through the parent to
+    read the result.
+    """
+    cfg = api.create({"l": [1, 2]})
+    view = cfg.l
+    view += [3]
+    return api.to_container(cfg)
+
+
 ABC_MIXIN_CASES = [
     ("reversed_dict", lambda api: list(reversed(api.create({"a": 1, "b": 2})))),
     ("popitem", lambda api: api.create({"a": 1, "b": 2, "c": 3}).popitem()),
     ("popitem_empty", lambda api: api.create({}).popitem()),
-    (
-        "reverse",
-        lambda api: (lambda c: (c.reverse(), api.to_container(c))[1])(api.create([1, 2, 3])),
-    ),
+    ("reverse", _reverse_a_list),
     ("reversed_list", lambda api: list(reversed(api.create([1, 2, 3])))),
-    # `+=` on a *held* view: the promise is in-place mutation, so the parent
-    # must see it. Rebinding via __add__ passes a naive `c += x; print(c)`
-    # check while leaving the parent stale.
-    (
-        "iadd_writes_through",
-        lambda api: (lambda cfg: (cfg.l.__iadd__([3]), api.to_container(cfg))[1])(
-            api.create({"l": [1, 2]})
-        ),
-    ),
-    (
-        "iadd_held_view",
-        lambda api: (lambda cfg, view: (view.__iadd__([3]), api.to_container(cfg))[1])(
-            *(lambda c: (c, c.l))(api.create({"l": [1, 2]}))
-        ),
-    ),
+    ("iadd_writes_through", _iadd_through_the_parent),
+    ("iadd_held_view", _iadd_through_a_held_view),
 ]
 
 

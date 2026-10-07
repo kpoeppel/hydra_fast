@@ -42,6 +42,7 @@ print("OK")
 def test_shim_redirects_library_imports():
     proc = subprocess.run(
         [sys.executable, "-c", SCRIPT.format(src=SRC)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -69,7 +70,9 @@ assert restored.__version__ == real_version, (restored.__version__, real_version
 assert restored is real
 print("OK")
 """
-    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    proc = subprocess.run(
+        [sys.executable, "-c", script], check=False, capture_output=True, text=True
+    )
     if "ModuleNotFoundError" in proc.stderr and "omegaconf" in proc.stderr:
         import pytest
 
@@ -119,6 +122,7 @@ def test_unshimmed_submodules_fall_through_to_the_real_package():
     """The shim replaces a surface, not a namespace."""
     proc = subprocess.run(
         [sys.executable, "-c", FALLTHROUGH_SCRIPT.format(src=SRC)],
+        check=False,
         capture_output=True,
         text=True,
         cwd="/",  # away from the repo, so vendored source cannot shadow

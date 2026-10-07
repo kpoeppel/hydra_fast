@@ -518,10 +518,16 @@ class ConfigLoader:
         job["config_name"] = config_name
 
 
-def _combine_types(first: Optional[Dict], second: Optional[Dict]) -> Optional[Dict]:
+def _combine_types(accumulated: Optional[Dict], incoming: Optional[Dict]) -> Optional[Dict]:
+    """Merge a newly loaded config's type map into the accumulated one.
+
+    ``incoming`` wins, because a config later in the defaults list overrides
+    an earlier one -- which is why the arguments reach ``combine`` reversed:
+    its contract is that the *first* map wins.
+    """
     from .._typing import combine
 
-    return combine(second, first) if second else first
+    return combine(incoming, accumulated) if incoming else accumulated
 
 
 def _nest_types(types: Optional[Dict], prefix: Tuple[Any, ...]) -> Optional[Dict]:

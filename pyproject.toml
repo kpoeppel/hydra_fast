@@ -70,6 +70,75 @@ include = ["hydra_fast*"]
 [tool.setuptools.package-data]
 hydra_fast = ["py.typed", "conf/**/*.yaml"]
 
+[tool.pylint.main]
+# pylint runs alongside ruff rather than instead of it. ruff's "PL" family
+# already covers most of pylint, so what is enabled here is the remainder --
+# the checks ruff has no equivalent for. The disables below are therefore
+# almost all "ruff already says this" or "this codebase decided otherwise",
+# each noted.
+jobs = 0
+py-version = "3.10"
+# The two ported hydra modules keep upstream's shape so they stay diffable
+# against it -- the same reason they carry an "ALL" entry in ruff's
+# per-file-ignores. Restructuring them to satisfy a linter would defeat that.
+ignore-paths = [
+  "src/hydra_fast/_internal/defaults_list.py",
+  "src/hydra_fast/_internal/default_element.py",
+]
+
+[tool.pylint."messages control"]
+disable = [
+  # --- ruff already reports these, under its PL/E/F/SIM families -----------
+  "line-too-long",
+  "unused-import",
+  "unused-variable",
+  "too-many-return-statements",
+  "too-many-arguments",
+  "too-many-positional-arguments",
+  "too-many-branches",
+  "too-many-statements",
+  "too-many-locals",
+  "too-many-instance-attributes",
+  "too-many-public-methods",
+  "too-many-lines",
+  "global-statement",
+  "no-else-return",
+  "no-else-raise",
+  "consider-using-enumerate",
+  "implicit-str-concat",
+  "redefined-builtin",
+  "broad-exception-caught",
+  "unidiomatic-typecheck",
+  # --- decisions this codebase has already made ----------------------------
+  # The library reimplements omegaconf's API, which is `_`-prefixed almost
+  # everywhere: `cfg._get_node`, `node._value`, `_hf_root`. Reaching for it is
+  # the job, not a smell.
+  "protected-access",
+  # Deferred imports break the container/omegaconf_api/grammar cycles and keep
+  # `import hydra_fast` cheap. The cycles pylint reports are the ones they
+  # exist to break, so both messages describe the design.
+  "import-outside-toplevel",
+  "cyclic-import",
+  # The shim mirrors the public surface by construction, and the two grammar
+  # modules transcribe analogous grammars; the repetition is the point.
+  "duplicate-code",
+  # Docstrings are on the things that need explaining, not on every accessor.
+  "missing-function-docstring",
+  "missing-class-docstring",
+  "missing-module-docstring",
+  # Signatures mirror omegaconf's, parameters included, so some go unused.
+  "unused-argument",
+  # Matching hydra's own class shapes, which pylint would restructure.
+  "invalid-name",
+  "too-few-public-methods",
+  "abstract-method",
+  "keyword-arg-before-vararg",
+  "too-many-ancestors",
+  "attribute-defined-outside-init",
+  # `attr` is an optional extra; the import is guarded at runtime.
+  "import-error",
+]
+
 [tool.bandit]
 # B101: `assert` is how the internal invariants are written.
 # B608: the SQL-injection heuristic matches the words "delete ... from" inside
@@ -96,12 +165,45 @@ src = ["src", "tests", "bench"]
 # "UP" (pyupgrade) is deliberately not selected: typing.Dict/Optional spellings
 # are kept so the annotations read the same on the 3.10 floor as on 3.13, and
 # the ported hydra modules keep upstream's style.
-select = ["E", "F", "W", "I", "B", "C4", "SIM"]
+# "PL" is ruff's pylint family, which is what gives this the same coverage
+# compoconf gets from its separate pylint hook; black/flake8/isort are all
+# subsumed by ruff itself.
+# "UP" (pyupgrade) is deliberately not selected: typing.Dict/Optional spellings
+# are kept so the annotations read the same on the 3.10 floor as on 3.13, and
+# the ported hydra modules keep upstream's style.
+select = ["E", "F", "W", "I", "B", "C4", "SIM", "PL"]
 ignore = [
   "E501",   # long lines are the formatter's business
   "B008",   # function call in a default is used deliberately for sentinels
   "SIM108", # ternaries are not always clearer
+  # --- pylint family, each disabled for a reason ------------------------
+  # Deferred imports are structural here, not laziness: they break the cycles
+  # between container/omegaconf_api/grammar and keep `import hydra_fast` cheap,
+  # which is the point of the library. 289 sites.
+  "PLC0415",
+  # A parser compares against token constants and literal characters
+  # constantly; there is no "named constant" to prefer.
+  "PLR2004",
+  # `IntervalSweep` defines __eq__ without __hash__ because hydra's does, and
+  # being unhashable in the same way is the compatibility requirement.
+  "PLW1641",
+  # Module-level state is the design: the caches, the shim's installed flag,
+  # and the resolver registries are process-wide on purpose.
+  "PLW0603",
+  # Reusing the loop variable while normalising a line is clearer than naming
+  # each intermediate.
+  "PLW2901",
 ]
+
+[tool.ruff.lint.pylint]
+# Set at today's worst case rather than ruff's defaults: the grammar and the
+# ported Defaults List are intrinsically branchy, and a limit that fails on
+# arrival teaches nothing. These catch *growth* -- anything worse than what is
+# already here has to be deliberate.
+max-returns = 21
+max-branches = 37
+max-args = 8
+max-statements = 70
 
 [tool.ruff.format]
 # The same two files the lint ignores below cover. `per-file-ignores` governs

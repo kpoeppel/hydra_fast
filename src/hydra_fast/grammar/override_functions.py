@@ -165,10 +165,9 @@ def _sort_sweep(sweep: Any, reverse: bool) -> Any:
             if out.step < 0:
                 out.start, out.stop = out.stop + abs(out.step), out.start + abs(out.step)
                 out.step = -out.step
-        else:
-            if out.step > 0:
-                out.start, out.stop = out.stop - out.step, out.start - out.step
-                out.step = -out.step
+        elif out.step > 0:
+            out.start, out.stop = out.stop - out.step, out.start - out.step
+            out.step = -out.step
         return out
     raise TypeError(f"Invalid sweep type: {type(sweep).__name__}")
 

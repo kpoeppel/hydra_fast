@@ -138,11 +138,10 @@ class OmegaConf:
         if isinstance(f, (str, pathlib.Path)):
             with open(f, "w", encoding="utf-8") as handle:
                 handle.write(text)
+        elif isinstance(f, (io.RawIOBase, io.BufferedIOBase)):
+            f.write(text.encode("utf-8"))  # type: ignore[arg-type]
         else:
-            if isinstance(f, (io.RawIOBase, io.BufferedIOBase)):
-                f.write(text.encode("utf-8"))  # type: ignore[arg-type]
-            else:
-                f.write(text)  # type: ignore[arg-type]
+            f.write(text)  # type: ignore[arg-type]
 
     @staticmethod
     def to_yaml(cfg: Any, *, resolve: bool = False, sort_keys: bool = False) -> str:
