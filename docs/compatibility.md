@@ -195,8 +195,48 @@ slash in the value and keeps the package at `db`.
 
 ### Bracket indexing in override keys (`a.b[0]=1`)
 
-hydra 1.3 rejects these. hydra 1.4-dev accepts them, and so does hydra-fast —
-a deliberate superset, tested in `test_value_path_superset`.
+hydra 1.3 rejects these. hydra-fast accepts them — a deliberate superset,
+tested in `test_value_path_superset`. 1.4-dev also rejects them, with
+`Error when parsing index: 0, string: a.b[0]=9 out of ['a.b[0]=9']`, which
+reads like a regression there rather than an intended change.
+
+## Why the target is 1.3, and what 1.4 would take
+
+hydra 1.4 is **not released**: the newest stable is 1.3.7, with `1.4.0.devN`
+builds on PyPI (omegaconf likewise — 2.3.1 stable, 2.4.0rc1 available). So
+`hydra-core>=1.3,<1.4` in the `test` extra is mostly a guard against a moving
+target. It constrains only the *reference implementation the differential
+tests compare against*: hydra-fast's single runtime dependency is PyYAML and
+it never imports hydra, so the bound cannot conflict with anything installed
+alongside it.
+
+Nothing in hydra-fast breaks under 1.4-dev. Measured against
+`hydra-core==1.4.0.dev10` + `omegaconf==2.4.0rc1`, all 699 of its own tests
+pass; the failures are differential comparisons, and 44 of those come from one
+cause — 1.4 warns `"The version_base parameter is deprecated"` on every
+compose, and the Defaults List audit compares warnings. Excluding that, the
+defaults-list audit differs on 4 of 44 cases, all message text.
+
+The actual deltas, should 1.4 ever be worth targeting:
+
+| | change in 1.4 / omegaconf 2.4 |
+| --- | --- |
+| **semantics** | group shorthand with an inferred package: `db: variants/mysql` composes to `db.variants.driver` rather than `db.driver`, and `db/variants=mysql` becomes a valid override. The only change that alters a composed config. |
+| **API** | `_partial_` yields a `_DeferredTarget` rather than a `functools.partial`; `version_base` is deprecated, slated for removal in 1.5 |
+| **omegaconf** | `_utils.get_yaml_loader` removed |
+| **messages** | the missing-`_self_` warning dropped; two Defaults List override messages reworded; interpolation errors gained `possible interpolation keys: …` |
+
+That is a version switch rather than a rewrite, and the machinery is already
+here: `hydra_fast.version.base_at_least()` gates the `_name_` deprecation the
+same way. The reason to wait is that a `.devN` target moves. Re-running the
+ten oracles against a release candidate would enumerate the work.
+
+One piece of provenance worth recording: 1.4's Defaults List override message
+is exactly `"Invalid Defaults List override 'a: two'."`, which this code once
+emitted and no longer does. That branch had been transcribed from the vendored
+1.4-dev copy into a 1.3-targeted library; it was removed to match 1.3, and
+hydra's own suggestion (`Did you mean to override a@composite.a?`) restored
+with it.
 
 ### Structured-config typing
 
