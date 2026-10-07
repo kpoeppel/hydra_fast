@@ -46,7 +46,9 @@ def _is_missing_value(value: Any) -> bool:
     return type(raw) is str and raw == MISSING
 
 
-def _is_interpolation_string(value: str, strict_interpolation_validation: bool = False) -> bool:
+def _is_interpolation_string(
+    value: str, strict_interpolation_validation: bool = False
+) -> bool:
     return "${" in value
 
 
@@ -230,9 +232,7 @@ def _is_missing_literal(value: Any) -> bool:
 
 #: YAML 1.1 spellings PyYAML reads as booleans, which is why a config key
 #: like `on:` or a value like `yes` needs quoting to stay a string.
-_YAML_BOOLS = frozenset(
-    {"y", "yes", "n", "no", "true", "false", "on", "off"}
-)
+_YAML_BOOLS = frozenset({"y", "yes", "n", "no", "true", "false", "on", "off"})
 
 
 def yaml_is_bool(value: str) -> bool:

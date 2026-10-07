@@ -134,7 +134,10 @@ UTILS_CALLS: List[Tuple[str, Any]] = [
     ("is_generic_list(int)", lambda u: u.is_generic_list(int)),
     ("is_union_annotation(Union[int,str])", lambda u: u.is_union_annotation(Union[int, str])),
     ("is_union_annotation(int)", lambda u: u.is_union_annotation(int)),
-    ("is_container_annotation(Dict[str,int])", lambda u: u.is_container_annotation(Dict[str, int])),
+    (
+        "is_container_annotation(Dict[str,int])",
+        lambda u: u.is_container_annotation(Dict[str, int]),
+    ),
     ("is_container_annotation(List[int])", lambda u: u.is_container_annotation(List[int])),
     ("is_container_annotation(int)", lambda u: u.is_container_annotation(int)),
     ("is_primitive_type_annotation(int)", lambda u: u.is_primitive_type_annotation(int)),

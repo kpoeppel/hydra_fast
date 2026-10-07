@@ -31,9 +31,9 @@ def test_node_layer_matches_omegaconf(label, factory):
     for key in list(real.keys()):
         real_node, fast_node = real._get_node(key), fast._get_node(key)
         for call_label, fn in oracle.NODE_CALLS:
-            assert oracle.call(fn, real_node) == oracle.call(fn, fast_node), (
-                f"{label}.{key} {call_label}"
-            )
+            assert oracle.call(fn, real_node) == oracle.call(
+                fn, fast_node
+            ), f"{label}.{key} {call_label}"
 
 
 def test_container_nodes_answer_the_scalar_protocol():
