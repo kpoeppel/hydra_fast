@@ -815,11 +815,9 @@ class DictConfig(Container):
     def get(self, key: Any, default_value: Any = _ABSENT) -> Any:
         data = self._hf_container()
         if key not in data:
-            if default_value is not _ABSENT:
-                return default_value
-            if self._get_flag("struct"):
-                raise self._hf_struct_error(ConfigAttributeError, key)
-            return None
+            # As omegaconf's DictConfig.get: a missing key gives the default (None)
+            # even in struct mode; only attribute / item access raises.
+            return None if default_value is _ABSENT else default_value
         return self._hf_get(self._hf_path + (key,), data[key])
 
     def _get_node(
