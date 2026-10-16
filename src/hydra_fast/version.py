@@ -17,7 +17,7 @@ from typing import Any, Optional
 from .core.singleton import Singleton
 
 #: Source of truth for hydra-fast's version.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = ["__version__", "base_at_least", "getbase", "setbase"]
 
