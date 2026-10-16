@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hydra-fast"
-version = "0.1.0"
+version = "0.1.1"
 description = "Hydra-compatible config composition, 10-100x faster, with process-wide file caching"
 readme = "README.md"
 # 3.10-3.13 are the versions the test suite is run against.
