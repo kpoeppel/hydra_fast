@@ -93,6 +93,15 @@ def test_missing_key_without_struct_returns_none_from_get():
     assert cfg.get("nope", "dflt") == "dflt"
 
 
+def test_struct_mode_get_returns_default_like_omegaconf():
+    cfg = OmegaConf.create({"a": {"b": 1}, "l": [{"x": 1}]})
+    OmegaConf.set_struct(cfg, True)
+    assert cfg.get("nope") is None
+    assert cfg.get("nope", 3) == 3
+    assert cfg.a.get("nope") is None
+    assert cfg.l[0].get("nope") is None
+
+
 def test_struct_mode_blocks_unknown_keys():
     cfg = OmegaConf.create({"a": 1})
     OmegaConf.set_struct(cfg, True)

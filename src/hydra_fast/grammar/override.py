@@ -565,7 +565,10 @@ _VALUE_PATH = (
     rf"(?:{_KEY_BRACKET}|\.{_KEY_SEGMENT})*"
 )
 
-_QUOTED = r"\"(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)\"" r"|'(?:(?:\\\\)*|(?:.)*?[^\\](?:\\\\)*)'"
+# ANTLR's ``.`` matches any character, so a quoted value may span lines.
+_QUOTED = (
+    r"\"(?:(?:\\\\)*|[\s\S]*?[^\\](?:\\\\)*)\"" r"|'(?:(?:\\\\)*|[\s\S]*?[^\\](?:\\\\)*)'"
+)
 
 _OVERRIDE_MODES: Dict[str, List[Tuple[str, int, Optional[str]]]] = {
     _KEY_MODE: [

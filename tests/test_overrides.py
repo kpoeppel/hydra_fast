@@ -93,6 +93,10 @@ LINES = [
     r"key=a\,b",
     r"key=a\ b",
     r"key=\[notalist\]",
+    # quoted values spanning lines (multi-line shell commands)
+    "cmd='set -eu\necho hi'",
+    "cmd=\"set -eu\necho 'hi'\n\"",
+    "cmds=['a\nb','c']",
 ]
 
 

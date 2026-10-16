@@ -36,6 +36,7 @@ from ..core.object_type import ObjectType
 from ..grammar.override import Override
 from ..errors import ConfigCompositionException
 from .. import _cache
+from ..version import base_at_least
 
 # key -> (contributing-file fingerprints, defaults, tree, known_choices,
 #         known_choices_per_group)
@@ -543,6 +544,10 @@ def _validate_paths(default: InputDefault, parent: InputDefault) -> None:
                 "information."
             )
         if ".." not in path.split("/"):
+            continue
+        if not base_at_least("1.4"):
+            # Hydra 1.3 resolves '..' against the parent config's directory (many
+            # existing trees rely on it, e.g. ``- ../../base``); the check is 1.4's.
             continue
 
         guidance = {

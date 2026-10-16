@@ -253,6 +253,21 @@ TREES: Dict[str, Any] = {
         "config",
         [[], ["outer=two"], ["outer/inner=y"]],
     ),
+    # Hydra 1.3: '..' in a nested primary config's defaults resolves against its
+    # directory (the layout of experiment trees: experiments/a/b/x.yaml -> ../../base)
+    "parent_traversal": (
+        {
+            "conf/experiments/base.yaml": "# @package _global_\nbase: 1\nname: base\n",
+            "conf/experiments/a/b/base_x.yaml": (
+                "# @package _global_\ndefaults:\n  - ../../base\n  - _self_\nname: x\n"
+            ),
+            "conf/experiments/a/b/x.yaml": (
+                "# @package _global_\ndefaults:\n  - base_x\n  - _self_\nleaf: 2\n"
+            ),
+        },
+        "experiments/a/b/x",
+        [[], ["leaf=3"]],
+    ),
 }
 
 
