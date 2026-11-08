@@ -46,9 +46,12 @@ every file that could feed them. Two things keep that cheap
   caches, rather than each walking the tree.
 
 Existence checks (`is_config` / `is_group`) are cached against the **parent
-directory's mtime**. A directory's mtime changes exactly when an entry is added
-or removed from it — exactly when an existence answer can change. One stat per
-directory per composition replaces ~12,000 per-file stats. This was worth 20%.
+directory's identity**. Adding or removing an entry changes that directory's
+metadata -- exactly when an existence answer can change. The token includes
+mtime, ctime, size, inode and link count because some filesystems (tmpfs)
+stamp mtime at a coarse clock, so mtime alone can miss two changes in one
+tick. One stat per directory per composition replaces ~12,000 per-file stats.
+This was worth 20%.
 
 `set_validation("never")` skips revalidation entirely and trusts the first read
 for the life of the process. Note that after the three optimizations above it

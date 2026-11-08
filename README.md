@@ -274,8 +274,8 @@ that depend on it. No explicit reload call is needed.
 
 That covers more than edits. A file *added* to a group, a file *removed* from
 one, a whole new group directory, and a changed `defaults:` list are all
-picked up, because existence is cached against the parent directory's mtime --
-which changes exactly when an entry is added or removed. `tests/test_cache.py`
+picked up, because existence is cached against the parent directory's
+identity -- which changes when an entry is added or removed. `tests/test_cache.py`
 pins each case.
 
 `"never"` skips all of that and trusts the first read for the life of the

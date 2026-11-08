@@ -13,6 +13,11 @@ to upload if the tag and the packaged version disagree.
   check was previously skipped only below 1.4, so a project declaring
   `version_base="1.4"` was rejected even though composition semantics here are
   hydra 1.3's throughout.
+- Make existence-cache invalidation reliable on filesystems with coarse
+  directory timestamps (tmpfs): the parent-directory token now includes size,
+  ctime, inode and link count, not just `mtime_ns`. This fixes the intermittent
+  `tests/test_cache.py` failures when a file or group directory is added and
+  probed within one clock tick.
 
 ## 0.1.1
 

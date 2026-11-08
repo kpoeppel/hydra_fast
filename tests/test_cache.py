@@ -214,9 +214,10 @@ def test_clear_all_empties_everything(tmp_path):
 #
 # Editing a file is the easy case and is covered in test_compose.py. Adding
 # and removing files is the interesting one: existence is cached against the
-# *parent directory's* mtime (one stat per directory per composition instead
-# of ~12,000 per-file stats), which is only correct because a directory's
-# mtime changes exactly when an entry is added or removed from it. These pin
+# *parent directory's* identity (one stat per directory per composition instead
+# of ~12,000 per-file stats), which is correct when that identity changes on
+# add/remove. The token carries more than mtime because tmpfs stamps directory
+# mtimes coarsely; without the size/ctime parts these tests flake. These pin
 # that reasoning.
 # ---------------------------------------------------------------------------
 _DETECT_TREE = {

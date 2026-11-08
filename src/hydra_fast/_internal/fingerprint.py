@@ -39,12 +39,13 @@ _realpath_cache = _cache.new_cache("realpath", maxsize=1 << 16)
 # compose cache do not each walk the tree.
 _scope: Dict[Any, Tuple] = {}
 
-# Directory mtimes, re-read once per composition. A directory's mtime changes
-# exactly when an entry is added or removed from it, which is exactly when an
+# Directory identity, re-read once per composition. A directory's metadata
+# changes when an entry is added or removed from it, which is exactly when a
 # "does this config exist?" answer can change -- editing a file's *contents*
 # does not change existence, and content changes are caught separately by the
-# read cache. So one stat per directory per composition replaces one stat per
-# candidate path per query.
+# read cache. mtime alone is not enough on filesystems with a coarse clock
+# (tmpfs), so the token carries size/ctime/inode/link count too. One stat per
+# directory per composition replaces one stat per candidate path per query.
 _dir_tokens: Dict[str, Any] = {}
 _path_kinds = _cache.new_cache("path_kind", maxsize=1 << 16)
 
@@ -82,9 +83,23 @@ def _dir_token(dirname: str) -> Any:
     except KeyError:
         pass
     try:
-        token: Any = os.stat(dirname).st_mtime_ns
+        st = os.stat(dirname)
     except OSError:
-        token = None
+        token: Any = None
+    else:
+        # mtime_ns alone is not enough: filesystems such as tmpfs stamp
+        # directory changes at a coarse clock, so adding and then probing a
+        # file within one tick can leave it unchanged. Directory size (and
+        # ctime) changes when entries are added or removed, so carry those
+        # too; the token only has to differ when the directory's contents may
+        # have changed.
+        token = (
+            st.st_mtime_ns,
+            st.st_ctime_ns,
+            st.st_size,
+            st.st_ino,
+            st.st_nlink,
+        )
     _dir_tokens[dirname] = token
     return token
 
