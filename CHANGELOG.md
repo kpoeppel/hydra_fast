@@ -6,6 +6,21 @@ add the section below, tag `vX.Y.Z`, push the tag, then publish the Release.
 The workflow re-runs the full test suite against the tagged commit and refuses
 to upload if the tag and the packaged version disagree.
 
+## Unreleased
+
+- Defaults List paths may use `..` parent traversal at every `version_base`,
+  resolving against the parent config's directory as hydra 1.3 does. The
+  check was previously skipped only below 1.4, so a project declaring
+  `version_base="1.4"` was rejected even though composition semantics here are
+  hydra 1.3's throughout.
+
+## 0.1.1
+
+- Allow `..` in Defaults List paths below `version_base` 1.4, as hydra 1.3
+  does.
+- Match omegaconf for multi-line quoted override values, and for `get()` on
+  struct configs.
+
 ## 0.1.0
 
 First release.

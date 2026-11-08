@@ -268,6 +268,19 @@ TREES: Dict[str, Any] = {
         "experiments/a/b/x",
         [[], ["leaf=3"]],
     ),
+    # The same traversal in a group path, without package headers: the package
+    # Hydra derives from the '..' segments is unusual but part of the contract.
+    "parent_traversal_group": (
+        {
+            "conf/experiments/a/group/one.yaml": "g: one\n",
+            "conf/experiments/a/group/two.yaml": "g: two\n",
+            "conf/experiments/a/b/x.yaml": (
+                "defaults:\n  - ../group: one\n  - _self_\nleaf: 2\n"
+            ),
+        },
+        "experiments/a/b/x",
+        [[], ["leaf=3"]],
+    ),
 }
 
 
@@ -334,6 +347,35 @@ def test_matches_hydra(tmp_path, name, files, config_name, overrides: List[str])
         ), f"hydra={expected_error or 'ok'} fast={got_error or 'ok'}"
         return
     assert expected == got
+
+
+@pytest.mark.parametrize("version_base", [None, "1.3", "1.4"])
+@pytest.mark.parametrize(
+    "tree_name,leaf_path",
+    [
+        ("parent_traversal", "leaf"),
+        ("parent_traversal_group", "experiments.a.b.leaf"),
+    ],
+)
+def test_parent_traversal_works_at_every_version_base(
+    tmp_path, tree_name, leaf_path, version_base
+):
+    """`version_base` gates warnings, not composition: '..' always resolves.
+
+    Hydra 1.3 -- this library's target -- resolves parent traversal against the
+    parent config's directory regardless of the declared base. Hydra 1.4's
+    rejection of '..' is out of scope, so it must not leak in through a
+    version_base of "1.4".
+    """
+    from hydra_fast import OmegaConf, compose, initialize_config_dir
+
+    files, config_name, _ = TREES[tree_name]
+    config_dir = write_tree(tmp_path / tree_name, files) / "conf"
+
+    with initialize_config_dir(version_base=version_base, config_dir=str(config_dir)):
+        cfg = compose(config_name=config_name, overrides=[])
+
+    assert OmegaConf.select(cfg, leaf_path) == 2
 
 
 # ---------------------------------------------------------------------------

@@ -156,7 +156,10 @@ provides `setbase` / `getbase` / `base_at_least`, the `initialize*` entry points
 declare it, and it gates the deprecation warnings that depend on it (currently
 the `_name_`-in-package warning for `version_base` below 1.2). Composition
 semantics are hydra 1.3's at every level -- the setting changes which warnings
-fire, not how configs compose, so `version_base=None` resolves to 1.3.
+fire, not how configs compose, so `version_base=None` resolves to 1.3. Parent
+traversal (`..`) in Defaults List paths is therefore always resolved against
+the parent config's directory, as hydra 1.3 does; hydra 1.4's rejection of `..`
+is not adopted.
 
 ## Deliberate deviations
 

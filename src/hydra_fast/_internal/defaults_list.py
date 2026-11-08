@@ -36,7 +36,6 @@ from ..core.object_type import ObjectType
 from ..grammar.override import Override
 from ..errors import ConfigCompositionException
 from .. import _cache
-from ..version import base_at_least
 
 # key -> (contributing-file fingerprints, defaults, tree, known_choices,
 #         known_choices_per_group)
@@ -527,10 +526,9 @@ def _validate_paths(default: InputDefault, parent: InputDefault) -> None:
         return
 
     for path_type, path in paths:
-        # Check for backslashes before parent traversal: the traversal check
-        # splits on '/', so a path like '..\secret' would otherwise slip through
-        # as a single segment and reach operating-system path handling, where
-        # Windows interprets '\' as a separator but POSIX and ConfigStore do not.
+        # Check for backslashes before the path reaches operating-system path
+        # handling: a path like '..\secret' would otherwise be a single segment
+        # here but a parent traversal on Windows.
         if "\\" in path:
             location = ""
             if not parent.is_virtual():
@@ -543,35 +541,10 @@ def _validate_paths(default: InputDefault, parent: InputDefault) -> None:
                 "See https://hydra.cc/docs/advanced/defaults_list/ for more "
                 "information."
             )
-        if ".." not in path.split("/"):
-            continue
-        if not base_at_least("1.4"):
-            # Hydra 1.3 resolves '..' against the parent config's directory (many
-            # existing trees rely on it, e.g. ``- ../../base``); the check is 1.4's.
-            continue
-
-        guidance = {
-            "config": "Use an absolute config path instead, such as '/group/config'.",
-            "config group": (
-                "Use an absolute config group path instead, such as '/group: option'."
-            ),
-            "config option": (
-                "Config options cannot contain parent traversal. Select the target "
-                "config directly. Use '/config' or '/group: option' in a Defaults "
-                "List, or 'group=option' (with '+' when adding a new default) on the "
-                "command line."
-            ),
-        }[path_type]
-        location = ""
-        if not parent.is_virtual():
-            location = f"In {parent.get_config_path()}: "
-        raise ConfigCompositionException(
-            f"{location}Parent traversal ('..') in Defaults List "
-            f"{path_type} paths is not supported ('{path}').\n"
-            f"{guidance}\n"
-            "See https://hydra.cc/docs/advanced/defaults_list/ for more "
-            "information."
-        )
+        # Hydra 1.3 -- the semantics implemented here at every version_base --
+        # resolves '..' against the parent config's directory, and many existing
+        # trees rely on it (e.g. ``- ../../base``). Hydra 1.4 rejects parent
+        # traversal instead; re-add that check only if 1.4 becomes the target.
 
 
 def _update_overrides(
