@@ -6,7 +6,7 @@ add the section below, tag `vX.Y.Z`, push the tag, then publish the Release.
 The workflow re-runs the full test suite against the tagged commit and refuses
 to upload if the tag and the packaged version disagree.
 
-## Unreleased
+## 0.1.2
 
 - Defaults List paths may use `..` parent traversal at every `version_base`,
   resolving against the parent config's directory as hydra 1.3 does. The
